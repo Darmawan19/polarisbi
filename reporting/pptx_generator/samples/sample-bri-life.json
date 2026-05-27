@@ -1,0 +1,36 @@
+{
+  "title": "BRI Life Industry Snapshot",
+  "subtitle": "Q4 2024 Performance Review & 2025 Outlook",
+  "client": "BRI Life Internal Strategy",
+  "author": "Lidharmawan Suryaatmadja",
+  "date": "2026-05-28",
+  "language": "en",
+  "sections": [
+    { "type": "cover" },
+    {
+      "type": "exec_summary",
+      "data": {
+        "headline": "BRI Life captured 11.4% of new APE in Q4 2024, driven by bancassurance acceleration through BRI's 33,000 outlet network",
+        "situation": "Indonesian life insurance industry premiums grew 9.3% YoY to Rp238.71T in FY 2024, with bancassurance now accounting for 42% of new business APE — the highest share since OJK began tracking.",
+        "complication": "Health claim ratio reached 139.5% in 1H 2024 (AAJI), squeezing underwriting margins across all 15 major players. BRI Life's ratio held at 121% but is rising.",
+        "resolution": [
+          "Bancassurance APE grew 41% YoY for BRI Life, outpacing the industry's 18% average",
+          "BRI Life ranks #5 in market share but #2 in growth velocity among top-10 players",
+          "RBC 434.6% provides 3.6x regulatory headroom for product expansion in 2025"
+        ]
+      }
+    },
+    {
+      "type": "kpi_dashboard",
+      "data": {
+        "headline": "BRI Life FY 2024 — four metrics that prove the bancassurance thesis",
+        "kpis": [
+          { "value": "Rp 8.9 T", "label": "Premi Bruto", "delta": "+14.1% YoY", "positive": true },
+          { "value": "Rp 3.42 T", "label": "APE", "delta": "+11.2% YoY", "positive": true },
+          { "value": "434.6%", "label": "RBC", "delta": "vs 120% OJK min", "positive": true },
+          { "value": "Rp 760 M", "label": "Net Profit", "delta": "+42.1% YoY", "positive": true }
+        ]
+      }
+    }
+  ]
+}
