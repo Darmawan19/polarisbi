@@ -17,7 +17,8 @@
           "Bancassurance APE grew 41% YoY for BRI Life, outpacing the industry's 18% average",
           "BRI Life ranks #5 in market share but #2 in growth velocity among top-10 players",
           "RBC 434.6% provides 3.6x regulatory headroom for product expansion in 2025"
-        ]
+        ],
+        "source": "OJK Statistik Perasuransian FY 2024; AAJI Q4 Bulletin; BRI Life Annual Report"
       }
     },
     {
@@ -29,7 +30,208 @@
           { "value": "Rp 3.42 T", "label": "APE", "delta": "+11.2% YoY", "positive": true },
           { "value": "434.6%", "label": "RBC", "delta": "vs 120% OJK min", "positive": true },
           { "value": "Rp 760 M", "label": "Net Profit", "delta": "+42.1% YoY", "positive": true }
-        ]
+        ],
+        "source": "BRI Life Audited Financial Statements FY 2024"
+      }
+    },
+    {
+      "type": "deep_dive",
+      "data": {
+        "headline": "Bancassurance channel grew 41% YoY for BRI Life — 2.3x faster than the industry average",
+        "subtitle": "APE contribution by distribution channel, FY 2023 vs FY 2024 (Rp Triliun)",
+        "chartType": "groupedColumn",
+        "chartData": [
+          {
+            "name": "FY 2023",
+            "labels": ["Bancassurance", "Agency", "Telemarketing", "Digital", "Worksite"],
+            "values": [1.62, 0.94, 0.31, 0.18, 0.07]
+          },
+          {
+            "name": "FY 2024",
+            "labels": ["Bancassurance", "Agency", "Telemarketing", "Digital", "Worksite"],
+            "values": [2.28, 0.71, 0.22, 0.16, 0.05]
+          }
+        ],
+        "insights": [
+          { "label": "Channel concentration", "text": "Bancassurance share grew from 51% to 67% of total APE" },
+          { "label": "BRI synergy", "text": "Cross-sell rate via BRI tellers reached 8.4% in Q4" },
+          { "label": "Forward signal", "text": "Q1 2025 trial in 50 BRI Premium branches shows further +18%" }
+        ],
+        "callout": {
+          "value": "41%",
+          "label": "Bancassurance APE growth, FY24 vs FY23"
+        },
+        "source": "BRI Life Distribution Channel MIS; internal cross-sell data"
+      }
+    },
+    {
+      "type": "comparison",
+      "data": {
+        "headline": "BRI Life vs Top 4 peers — strong in growth velocity, behind on RBC efficiency",
+        "subtitle": "FY 2024 key metrics comparison, top 5 by market share",
+        "columns": [
+          {
+            "label": "BRI Life",
+            "highlight": true,
+            "metrics": [
+              { "name": "Market Share (APE)", "value": "11.4%", "rank": "#5" },
+              { "name": "APE Growth YoY", "value": "+11.2%", "rank": "#2" },
+              { "name": "RBC", "value": "434.6%", "rank": "#3" },
+              { "name": "Bancassurance Mix", "value": "67%", "rank": "#1" },
+              { "name": "Claim Ratio", "value": "121%", "rank": "#4" }
+            ]
+          },
+          {
+            "label": "Prudential",
+            "metrics": [
+              { "name": "Market Share (APE)", "value": "18.2%", "rank": "#1" },
+              { "name": "APE Growth YoY", "value": "+6.8%", "rank": "#7" },
+              { "name": "RBC", "value": "521%", "rank": "#1" },
+              { "name": "Bancassurance Mix", "value": "38%", "rank": "#5" },
+              { "name": "Claim Ratio", "value": "108%", "rank": "#1" }
+            ]
+          },
+          {
+            "label": "Allianz",
+            "metrics": [
+              { "name": "Market Share (APE)", "value": "13.7%", "rank": "#3" },
+              { "name": "APE Growth YoY", "value": "+8.4%", "rank": "#5" },
+              { "name": "RBC", "value": "467%", "rank": "#2" },
+              { "name": "Bancassurance Mix", "value": "42%", "rank": "#4" },
+              { "name": "Claim Ratio", "value": "115%", "rank": "#2" }
+            ]
+          }
+        ],
+        "source": "OJK Statistik Perasuransian Q4 2024; company filings"
+      }
+    },
+    {
+      "type": "watch_areas",
+      "data": {
+        "headline": "Three watch items that could materially shift the 2025 outlook",
+        "subtitle": "Ranked by likely impact on BRI Life FY 2025 net profit",
+        "items": [
+          {
+            "severity": "high",
+            "title": "PSAK 117 transition (mandatory Jan 2025)",
+            "description": "IFRS 17 equivalent forces re-measurement of insurance contracts; could compress reported FY25 profit by 8-12% even with no underlying change",
+            "owner": "Finance + Actuarial",
+            "trigger": "Audit committee review Mar 2025"
+          },
+          {
+            "severity": "medium",
+            "title": "Health claim ratio trending toward 130%",
+            "description": "Industry-wide pressure from medical inflation + adverse selection on new healthcare products; BRI Life ratio +6pp in 12 months",
+            "owner": "Underwriting + Product",
+            "trigger": "Q2 2025 portfolio review"
+          },
+          {
+            "severity": "low",
+            "title": "BRI 2027 digital pivot may reduce branch foot traffic",
+            "description": "Bancassurance currently 67% of APE depends on physical BRI outlets; long-term threat if digital migration accelerates beyond 2027 plan",
+            "owner": "Strategy + Distribution",
+            "trigger": "BRI Group strategy refresh, Dec 2025"
+          }
+        ],
+        "source": "Internal risk register; PSAK 117 readiness audit"
+      }
+    },
+    {
+      "type": "recommendations",
+      "data": {
+        "headline": "Three priority actions to convert FY 2024 momentum into FY 2025 market-share gains",
+        "items": [
+          {
+            "priority": 1,
+            "action": "Launch Premium Bancassurance Tier in 50 BRI Premium branches",
+            "rationale": "Q1 2025 trial showed +18% conversion uplift vs standard tier; addressable market = 1.2M premium customers underweighted in current portfolio",
+            "owner": "Distribution + Product",
+            "timeline": "Q2 2025 rollout, full coverage by Q4",
+            "metric": "Premium APE contribution from 4% to 12% by FY25 end"
+          },
+          {
+            "priority": 2,
+            "action": "Tighten health underwriting bands for ages 50+",
+            "rationale": "Claim ratio escalation concentrated in this cohort (157% vs portfolio avg 121%); 18-month repricing window before product re-filing",
+            "owner": "Underwriting",
+            "timeline": "Q2 2025 model update, Q3 product re-file",
+            "metric": "Health claim ratio: 121% to 115% by Q4 2025"
+          },
+          {
+            "priority": 3,
+            "action": "Pre-empt PSAK 117 communications to investors and OJK",
+            "rationale": "Mandatory Jan 2025 adoption; transparent comms reduces stock reaction and shows proactive governance",
+            "owner": "IR + Finance",
+            "timeline": "Investor day Q1 2025, OJK briefing Feb",
+            "metric": "Zero negative analyst notes on PSAK 117 transition"
+          }
+        ],
+        "source": "Strategy committee; internal portfolio analytics"
+      }
+    },
+    {
+      "type": "peer_table",
+      "data": {
+        "headline": "Top 10 life insurers in Indonesia, FY 2024 — BRI Life ranks #5 by APE",
+        "subtitle": "Sorted by APE (Annualized Premium Equivalent), in Rp Triliun",
+        "columns": [
+          { "key": "rank", "label": "#", "width": 0.4 },
+          { "key": "company", "label": "Company", "width": 3.5 },
+          { "key": "ape", "label": "APE", "width": 1.3 },
+          { "key": "growth", "label": "YoY", "width": 1.0 },
+          { "key": "rbc", "label": "RBC", "width": 1.0 },
+          { "key": "share", "label": "Share", "width": 1.0 },
+          { "key": "claim", "label": "Claim Ratio", "width": 1.3 }
+        ],
+        "rows": [
+          { "rank": "1", "company": "Prudential Life Assurance", "ape": "Rp 5.46 T", "growth": "+6.8%", "rbc": "521%", "share": "18.2%", "claim": "108%" },
+          { "rank": "2", "company": "Allianz Life Indonesia", "ape": "Rp 4.11 T", "growth": "+8.4%", "rbc": "467%", "share": "13.7%", "claim": "115%" },
+          { "rank": "3", "company": "AIA Financial", "ape": "Rp 3.78 T", "growth": "+5.2%", "rbc": "443%", "share": "12.6%", "claim": "112%" },
+          { "rank": "4", "company": "Manulife Indonesia", "ape": "Rp 3.51 T", "growth": "+9.1%", "rbc": "456%", "share": "11.7%", "claim": "118%" },
+          { "rank": "5", "company": "BRI Life", "ape": "Rp 3.42 T", "growth": "+11.2%", "rbc": "434.6%", "share": "11.4%", "claim": "121%", "highlight": true },
+          { "rank": "6", "company": "AXA Mandiri", "ape": "Rp 2.18 T", "growth": "+7.6%", "rbc": "412%", "share": "7.3%", "claim": "119%" },
+          { "rank": "7", "company": "Sequis Life", "ape": "Rp 1.71 T", "growth": "+4.3%", "rbc": "398%", "share": "5.7%", "claim": "124%" },
+          { "rank": "8", "company": "Sinarmas MSIG", "ape": "Rp 1.32 T", "growth": "+3.8%", "rbc": "387%", "share": "4.4%", "claim": "127%" },
+          { "rank": "9", "company": "FWD Insurance", "ape": "Rp 0.94 T", "growth": "+14.6%", "rbc": "356%", "share": "3.1%", "claim": "131%" },
+          { "rank": "10", "company": "Sun Life Financial", "ape": "Rp 0.87 T", "growth": "+5.9%", "rbc": "421%", "share": "2.9%", "claim": "116%" }
+        ],
+        "source": "OJK Statistik Perasuransian Q4 2024; company filings (audited)"
+      }
+    },
+    {
+      "type": "appendix",
+      "data": {
+        "headline": "Appendix — Methodology, data sources, and definitions",
+        "sections": [
+          {
+            "title": "Data sources",
+            "items": [
+              "OJK Statistik Perasuransian: monthly aggregate, quarterly company-level data",
+              "AAJI Quarterly Bulletins: industry-wide health and life claim data",
+              "Company audited financial statements: APE, premium, RBC, claim breakdowns",
+              "Internal MIS: BRI Life channel-level cross-sell and conversion data"
+            ]
+          },
+          {
+            "title": "Definitions",
+            "items": [
+              "APE (Annualized Premium Equivalent): regular premium + 10% of single premium",
+              "RBC (Risk Based Capital): solvency ratio; OJK minimum 120%",
+              "Claim Ratio: incurred claims / earned premium; less than 100% is profitable",
+              "Bancassurance Mix: APE through bank distribution / total APE"
+            ]
+          },
+          {
+            "title": "Caveats",
+            "items": [
+              "FY 2024 figures are audited; Q1 2025 figures are preliminary",
+              "PSAK 117 restatement of FY 2024 not yet published by all companies",
+              "Market share calculations exclude sharia subsidiaries unless noted",
+              "Industry growth rates use AAJI weighted aggregates"
+            ]
+          }
+        ],
+        "source": "Methodology v1.0, May 2026"
       }
     }
   ]
