@@ -12,7 +12,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 # Add parent directory to path so we can import Day 1 modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import duckdb
 from anthropic import Anthropic
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -71,6 +71,16 @@ app.add_middleware(
 class AskRequest(BaseModel):
     question: str
     language: str = "id"  # "id" or "en"
+
+
+class FindingRequest(BaseModel):
+    question: str
+    sql: Optional[str] = None
+
+
+class ReportRequest(BaseModel):
+    title: Optional[str] = "Insurance Data Briefing"
+    findings: Optional[list[FindingRequest]] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -267,7 +277,32 @@ def report_options():
 
 
 @app.post("/api/report")
-def generate_report(kind: str = "deck", fmt: str = "pptx"):
+def generate_report(
+    kind: str = "deck",
+    fmt: str = "pptx",
+    req: Optional[ReportRequest] = Body(default=None),
+):
+    # Session mode: findings present + document kind
+    if req and req.findings and kind == "document":
+        try:
+            from reporting.assemble import assemble_report
+            raw_findings = [{"question": f.question, "sql": f.sql} for f in req.findings]
+            report = assemble_report(raw_findings, title=req.title or "Insurance Data Briefing")
+            from reporting.document import build_docx
+            docx_path = build_docx.build(report=report)
+            if fmt == "pdf":
+                from reporting import converters
+                path = converters.to_pdf(docx_path)
+            else:
+                path = docx_path
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"dynamic report failed: {e}")
+        media = _MEDIA_TYPES.get(fmt, "application/octet-stream")
+        return FileResponse(str(path), media_type=media, filename=path.name)
+
+    # Static mode (existing behaviour — deck or no-body document)
     try:
         path = reporting_service.generate_report(kind, fmt)
     except ValueError as e:

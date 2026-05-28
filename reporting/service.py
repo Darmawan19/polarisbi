@@ -19,7 +19,7 @@ def _ensure_deck():
         subprocess.run([node, "build.js"], cwd=str(DECK_DIR), check=True)
 
 
-def generate_report(kind: str, fmt: str) -> Path:
+def generate_report(kind: str, fmt: str, report=None) -> Path:
     if kind == "deck":
         _ensure_deck()
         if fmt == "pptx":
@@ -30,7 +30,7 @@ def generate_report(kind: str, fmt: str) -> Path:
 
     if kind == "document":
         from reporting.document import build_docx
-        docx_path = build_docx.build()
+        docx_path = build_docx.build(report=report)   # None → static REPORT
         if fmt == "docx":
             return docx_path
         if fmt == "pdf":

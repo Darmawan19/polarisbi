@@ -1,551 +1,611 @@
 """
-Build a consulting-grade Word document for the BRI Life FY2024 industry briefing.
-Brand-matched to the PPTX deck: navy/royal/inter/poppins palette.
-"""
+build_docx.py — renders the PolarisBI written report (a real consulting briefing,
+prose-led) from report_data.REPORT using python-docx.
 
+Architecture (conventions cherry-picked from McKinsey/Deloitte reports, original content):
+  Cover (title block + classification + KPI strip) -> Contents -> running header/footer
+  -> Executive Summary (prose) -> numbered sections (intro + bold lead-in + analysis,
+  tables demoted to captioned Exhibits) -> Methodology & Data Sources.
+
+Public entrypoint: build(report=None, out_dir=None) -> pathlib.Path to the .docx
+"""
 from pathlib import Path
 
 from docx import Document
+from docx.shared import Pt, RGBColor, Inches, Twips
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+from docx.oxml import OxmlElement
 
 from reporting.report_data import REPORT
 
-_OUT_DIR = Path(__file__).resolve().parent / "out"
-_OUT_FILE = _OUT_DIR / "PolarisBI-BRILife-FY2024-Report.docx"
+# ---------------------------------------------------------------- brand tokens
+NAVY   = "0C2340"
+ROYAL  = "164E96"
+BLUE   = "2F6FE0"
+GREEN  = "2E9E5B"
+RED    = "C0392B"
+AMBER  = "B7791F"
+INK    = "1F2733"
+GRAY   = "6B7280"
+GRAYLT = "9AA3AF"
+LINE   = "DCE2EC"
+SOFT   = "E8F0FC"
+CARD   = "F6F8FC"
+WHITE  = "FFFFFF"
 
-# ── Color helpers ─────────────────────────────────────────────────────────────
+HEAD = "Poppins"   # display / headings (installed on host; falls back gracefully)
+BODY = "Inter"     # body text
 
-def _hex(h: str) -> RGBColor:
-    h = h.lstrip("#")
-    return RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+CONTENT_W = 9360   # US Letter, 1" margins, in DXA/twips (8.5" - 2")
 
-C_NAVY     = _hex("0C2340")
-C_ROYAL    = _hex("164E96")
-C_BLUE     = _hex("2F6FE0")
-C_BLUE_SOFT = _hex("E8F0FC")
-C_GREEN    = _hex("2E9E5B")
-C_AMBER    = _hex("D98A1F")
-C_RED      = _hex("D64545")
-C_GRAY     = _hex("6B7689")
-C_GRAY_LT  = _hex("9AA4B6")
-C_LINE     = _hex("DCE2EC")
-C_CARD_BG  = _hex("F6F8FC")
-C_WHITE    = _hex("FFFFFF")
-C_INK      = _hex("1A2230")
 
-SEV_COLOR = {"red": C_RED, "amber": C_AMBER, "green": C_GREEN}
+# ----------------------------------------------------------------- low-level helpers
+def _set_font(run, font=BODY, size=10.5, bold=False, italic=False, color=INK,
+              small_caps=False, spacing=None):
+    run.font.name = font
+    run.font.size = Pt(size)
+    run.bold = bold
+    run.italic = italic
+    if color:
+        run.font.color.rgb = RGBColor.from_string(color)
+    rpr = run._element.get_or_add_rPr()
+    rfonts = rpr.find(qn("w:rFonts"))
+    if rfonts is None:
+        rfonts = OxmlElement("w:rFonts")
+        rpr.append(rfonts)
+    for attr in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
+        rfonts.set(qn(attr), font)
+    if small_caps:
+        sc = OxmlElement("w:smallCaps")
+        rpr.append(sc)
+    if spacing is not None:  # letter-spacing in twentieths of a point
+        sp = OxmlElement("w:spacing")
+        sp.set(qn("w:val"), str(spacing))
+        rpr.append(sp)
 
-# ── XML utilities ─────────────────────────────────────────────────────────────
 
-def _set_cell_bg(cell, hex_color: str):
-    tc = cell._tc
-    tcPr = tc.get_or_add_tcPr()
+def _shade(cell, fill):
+    tcpr = cell._tc.get_or_add_tcPr()
     shd = OxmlElement("w:shd")
     shd.set(qn("w:val"), "clear")
     shd.set(qn("w:color"), "auto")
-    shd.set(qn("w:fill"), hex_color.lstrip("#"))
-    tcPr.append(shd)
+    shd.set(qn("w:fill"), fill)
+    tcpr.append(shd)
 
 
-def _set_cell_borders(cell, *, top=None, bottom=None, left=None, right=None):
-    tc = cell._tc
-    tcPr = tc.get_or_add_tcPr()
+def _cell_margins(cell, top=60, bottom=60, left=110, right=110):
+    tcpr = cell._tc.get_or_add_tcPr()
+    m = OxmlElement("w:tcMar")
+    for tag, val in (("top", top), ("bottom", bottom), ("start", left), ("end", right),
+                     ("left", left), ("right", right)):
+        e = OxmlElement(f"w:{tag}")
+        e.set(qn("w:w"), str(val))
+        e.set(qn("w:type"), "dxa")
+        m.append(e)
+    tcpr.append(m)
+
+
+def _no_table_borders(table):
+    tblpr = table._tbl.tblPr
+    borders = OxmlElement("w:tblBorders")
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        e = OxmlElement(f"w:{edge}")
+        e.set(qn("w:val"), "none")
+        borders.append(e)
+    tblpr.append(borders)
+
+
+def _row_bottom_border(cell, color=LINE, size=4):
+    tcpr = cell._tc.get_or_add_tcPr()
     borders = OxmlElement("w:tcBorders")
-    for side, val in [("top", top), ("bottom", bottom), ("left", left), ("right", right)]:
-        if val:
-            el = OxmlElement(f"w:{side}")
-            el.set(qn("w:val"), val.get("val", "single"))
-            el.set(qn("w:sz"), str(val.get("sz", 4)))
-            el.set(qn("w:color"), val.get("color", "auto"))
-            borders.append(el)
-    tcPr.append(borders)
+    b = OxmlElement("w:bottom")
+    b.set(qn("w:val"), "single")
+    b.set(qn("w:sz"), str(size))
+    b.set(qn("w:color"), color)
+    borders.append(b)
+    tcpr.append(borders)
 
 
-def _set_table_border(table, hex_color: str = "DCE2EC", sz: int = 4):
-    tbl = table._tbl
-    tblPr = tbl.tblPr
-    if tblPr is None:
-        tblPr = OxmlElement("w:tblPr")
-        tbl.insert(0, tblPr)
-    tblBorders = OxmlElement("w:tblBorders")
-    for side in ("top", "left", "bottom", "right", "insideH", "insideV"):
-        el = OxmlElement(f"w:{side}")
-        el.set(qn("w:val"), "single")
-        el.set(qn("w:sz"), str(sz))
-        el.set(qn("w:color"), hex_color.lstrip("#"))
-        tblBorders.append(el)
-    tblPr.append(tblBorders)
+def _para_rule(paragraph, color=NAVY, size=8, space=2, edge="bottom"):
+    ppr = paragraph._p.get_or_add_pPr()
+    pbdr = ppr.find(qn("w:pBdr"))
+    if pbdr is None:
+        pbdr = OxmlElement("w:pBdr")
+        ppr.append(pbdr)
+    b = OxmlElement(f"w:{edge}")
+    b.set(qn("w:val"), "single")
+    b.set(qn("w:sz"), str(size))
+    b.set(qn("w:space"), str(space))
+    b.set(qn("w:color"), color)
+    pbdr.append(b)
 
 
-def _set_col_widths(table, widths_in: list[float]):
-    """Apply column widths in inches to a table."""
-    for i, col in enumerate(table.columns):
-        if i < len(widths_in):
-            col.width = Inches(widths_in[i])
-
-
-def _set_cant_split(table):
-    """Prevent any single row from splitting across a page boundary."""
+def _set_col_widths(table, widths):
+    table.autofit = False
+    table.allow_autofit = False
     for row in table.rows:
-        trPr = row._tr.get_or_add_trPr()
-        cs = OxmlElement("w:cantSplit")
-        trPr.append(cs)
+        for i, w in enumerate(widths):
+            row.cells[i].width = Twips(w)
+    # also set tblGrid so Word/LibreOffice honor widths
+    tbl = table._tbl
+    grid = tbl.find(qn("w:tblGrid"))
+    if grid is not None:
+        tbl.remove(grid)
+    grid = OxmlElement("w:tblGrid")
+    for w in widths:
+        c = OxmlElement("w:gridCol")
+        c.set(qn("w:w"), str(w))
+        grid.append(c)
+    tbl.tblPr.addnext(grid)
 
 
-def _keep_next(para):
-    """Keep this paragraph on the same page as the one that follows it."""
-    pPr = para._p.get_or_add_pPr()
-    kn = OxmlElement("w:keepNext")
-    pPr.append(kn)
+def _keep_with_next(paragraph):
+    ppr = paragraph._p.get_or_add_pPr()
+    k = OxmlElement("w:keepNext")
+    ppr.append(k)
 
 
-def _para_spacing(para, before: int = 0, after: int = 0, line: int = None):
-    pPr = para._p.get_or_add_pPr()
-    spacing = OxmlElement("w:spacing")
-    spacing.set(qn("w:before"), str(before))
-    spacing.set(qn("w:after"), str(after))
-    if line:
-        spacing.set(qn("w:line"), str(line))
-        spacing.set(qn("w:lineRule"), "auto")
-    pPr.append(spacing)
+def _no_split_rows(table):
+    for row in table.rows:
+        trpr = row._tr.get_or_add_trPr()
+        cant = OxmlElement("w:cantSplit")
+        trpr.append(cant)
 
 
-def _add_rule(doc, hex_color: str = "164E96", thickness_pt: int = 2):
-    """A thin colored horizontal rule paragraph."""
-    p = doc.add_paragraph()
-    _para_spacing(p, before=0, after=80)
-    pPr = p._p.get_or_add_pPr()
-    pBdr = OxmlElement("w:pBdr")
-    bottom = OxmlElement("w:bottom")
-    bottom.set(qn("w:val"), "single")
-    bottom.set(qn("w:sz"), str(thickness_pt * 4))
-    bottom.set(qn("w:space"), "1")
-    bottom.set(qn("w:color"), hex_color.lstrip("#"))
-    pBdr.append(bottom)
-    pPr.append(pBdr)
+def _add_page_number(paragraph):
+    run = paragraph.add_run()
+    fb = OxmlElement("w:fldChar"); fb.set(qn("w:fldCharType"), "begin")
+    it = OxmlElement("w:instrText"); it.set(qn("xml:space"), "preserve"); it.text = " PAGE "
+    fe = OxmlElement("w:fldChar"); fe.set(qn("w:fldCharType"), "end")
+    run._r.append(fb); run._r.append(it); run._r.append(fe)
+    _set_font(run, BODY, 8.5, color=GRAY)
+
+
+def _blank(paragraph_factory, pts=6):
+    p = paragraph_factory()
+    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.space_before = Pt(0)
+    r = p.add_run("")
+    _set_font(r, BODY, pts)
     return p
 
 
-# ── Text helpers ──────────────────────────────────────────────────────────────
-
-def _run(para, text: str, *, bold=False, italic=False, color=None,
-         size=None, font="Inter"):
-    run = para.add_run(text)
-    run.bold = bold
-    run.italic = italic
-    run.font.name = run.font.name  # keep existing, will be overridden
-    run.font.name = font
-    # Set east-asia and ascii to same font via XML so it applies in Word
-    rPr = run._r.get_or_add_rPr()
-    for tag in ("w:rFonts",):
-        existing = rPr.find(qn(tag))
-        if existing is not None:
-            rPr.remove(existing)
-    rFonts = OxmlElement("w:rFonts")
-    rFonts.set(qn("w:ascii"), font)
-    rFonts.set(qn("w:hAnsi"), font)
-    rFonts.set(qn("w:eastAsia"), font)
-    rPr.insert(0, rFonts)
-    if color:
-        run.font.color.rgb = color
-    if size:
-        run.font.size = size
-    return run
+# ----------------------------------------------------------------- page geometry
+def _setup_page(section):
+    section.page_width = Twips(12240)
+    section.page_height = Twips(15840)
+    section.top_margin = Twips(1180)
+    section.bottom_margin = Twips(1120)
+    section.left_margin = Twips(1440)
+    section.right_margin = Twips(1440)
+    section.header_distance = Twips(720)
+    section.footer_distance = Twips(620)
 
 
-def _heading(doc, text: str, level: int = 1):
-    """Section heading with royal-blue rule underneath."""
+def _build_header_footer(section, meta):
+    section.different_first_page_header_footer = True  # cover stays clean
+
+    # ---- running header (pages 2+)
+    hdr = section.header
+    hp = hdr.paragraphs[0]
+    hp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    r = hp.add_run(meta["running_title"])
+    _set_font(r, BODY, 8, bold=False, color=GRAYLT, small_caps=True, spacing=20)
+    _para_rule(hp, color=LINE, size=4, space=4, edge="bottom")
+
+    # ---- running footer (pages 2+): confidentiality (left) + page number (right)
+    ftr = section.footer
+    fp = ftr.paragraphs[0]
+    fp.paragraph_format.tab_stops.add_tab_stop(Inches(6.5), WD_TAB_ALIGNMENT.RIGHT)
+    _para_rule(fp, color=LINE, size=4, space=4, edge="top")
+    r = fp.add_run(meta["footer"])
+    _set_font(r, BODY, 8, color=GRAY)
+    rt = fp.add_run("\t")
+    _set_font(rt, BODY, 8, color=GRAY)
+    pre = fp.add_run("Page ")
+    _set_font(pre, BODY, 8.5, color=GRAY)
+    _add_page_number(fp)
+
+    # keep first-page header/footer empty
+    section.first_page_header.paragraphs[0].text = ""
+    section.first_page_footer.paragraphs[0].text = ""
+
+
+# ----------------------------------------------------------------- cover
+def _build_cover(doc, meta, kpis):
+    for _ in range(2):
+        _blank(doc.add_paragraph, 6)
+
     p = doc.add_paragraph()
-    _para_spacing(p, before=280, after=40)
-    if level == 1:
-        _run(p, text, bold=True, color=C_NAVY, size=Pt(16), font="Poppins")
+    r = p.add_run(meta["eyebrow"].upper())
+    _set_font(r, BODY, 9.5, bold=True, color=ROYAL, small_caps=True, spacing=40)
+    p.paragraph_format.space_after = Pt(14)
+
+    p = doc.add_paragraph()
+    r = p.add_run(meta["title"])
+    _set_font(r, HEAD, 30, bold=True, color=NAVY)
+    p.paragraph_format.space_after = Pt(2)
+
+    p = doc.add_paragraph()
+    _para_rule(p, color=NAVY, size=18, space=6, edge="bottom")
+    p.paragraph_format.space_after = Pt(12)
+
+    p = doc.add_paragraph()
+    r = p.add_run(meta["subtitle"])
+    _set_font(r, BODY, 13, color=GRAY)
+    p.paragraph_format.space_after = Pt(30)
+
+    # KPI strip — 4 columns, borderless (skip if none provided)
+    if kpis:
+        tbl = doc.add_table(rows=1, cols=4)
+        tbl.alignment = WD_TABLE_ALIGNMENT.LEFT
+        _no_table_borders(tbl)
+        _set_col_widths(tbl, [CONTENT_W // 4] * 4)
+        for i, k in enumerate(kpis):
+            cell = tbl.rows[0].cells[i]
+            cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+            _cell_margins(cell, top=40, bottom=40, left=0, right=140)
+            pl = cell.paragraphs[0]
+            rr = pl.add_run(k["label"].upper())
+            _set_font(rr, BODY, 7.5, bold=True, color=GRAYLT, small_caps=True, spacing=20)
+            pl.paragraph_format.space_after = Pt(1)
+            pv = cell.add_paragraph()
+            rr = pv.add_run(k["value"])
+            _set_font(rr, HEAD, 17, bold=True, color=NAVY)
+            pv.paragraph_format.space_after = Pt(1)
+            pd = cell.add_paragraph()
+            rr = pd.add_run(k["delta"])
+            _set_font(rr, BODY, 9, bold=True, color=GREEN)
+
+    # push author block toward the bottom
+    for _ in range(8):
+        _blank(doc.add_paragraph, 6)
+
+    p = doc.add_paragraph()
+    _para_rule(p, color=LINE, size=6, space=6, edge="bottom")
+    p.paragraph_format.space_after = Pt(8)
+
+    p = doc.add_paragraph()
+    r = p.add_run(meta["classification"])
+    _set_font(r, BODY, 9.5, italic=True, color=GRAY)
+    p.paragraph_format.space_after = Pt(4)
+
+    p = doc.add_paragraph()
+    r = p.add_run(f'{meta["author"]}   ·   {meta["date"]}')
+    _set_font(r, BODY, 10, color=INK)
+
+    doc.add_page_break()
+
+
+# ----------------------------------------------------------------- contents
+def _build_contents(doc, sections, include_methodology=True):
+    p = doc.add_paragraph()
+    r = p.add_run("Contents")
+    _set_font(r, HEAD, 18, bold=True, color=NAVY)
+    _para_rule(p, color=NAVY, size=8, space=4, edge="bottom")
+    p.paragraph_format.space_after = Pt(16)
+
+    entries = [("", "Executive Summary")]
+    for s in sections:
+        entries.append((s["num"], s["title"]))
+    if include_methodology:
+        entries.append(("", "Methodology & Data Sources"))
+
+    for num, title in entries:
+        line = doc.add_paragraph()
+        line.paragraph_format.space_after = Pt(9)
+        if num:
+            rn = line.add_run(f"{num}    ")
+            _set_font(rn, HEAD, 11.5, bold=True, color=ROYAL)
+        rt = line.add_run(title)
+        _set_font(rt, BODY, 11.5, color=INK)
+
+    doc.add_page_break()
+
+
+# ----------------------------------------------------------------- exec summary
+def _build_exec_summary(doc, paras):
+    h = doc.add_paragraph()
+    r = h.add_run("Executive Summary")
+    _set_font(r, HEAD, 16, bold=True, color=NAVY)
+    _para_rule(h, color=NAVY, size=8, space=4, edge="bottom")
+    h.paragraph_format.space_before = Pt(2)
+    h.paragraph_format.space_after = Pt(12)
+
+    for para in paras:
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(11)
+        p.paragraph_format.line_spacing = 1.28
+        r = p.add_run(para)
+        _set_font(r, BODY, 10.5, color=INK)
+
+
+# ----------------------------------------------------------------- section pieces
+def _section_heading(doc, num, title):
+    h = doc.add_paragraph()
+    h.paragraph_format.space_before = Pt(18)
+    h.paragraph_format.space_after = Pt(10)
+    _keep_with_next(h)
+    rn = h.add_run(f"{num}.  ")
+    _set_font(rn, HEAD, 15, bold=True, color=ROYAL)
+    rt = h.add_run(title)
+    _set_font(rt, HEAD, 15, bold=True, color=NAVY)
+    _para_rule(h, color=NAVY, size=6, space=4, edge="bottom")
+
+
+def _intro_para(doc, text):
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(11)
+    p.paragraph_format.line_spacing = 1.28
+    r = p.add_run(text)
+    _set_font(r, BODY, 10.5, color=INK)
+
+
+def _lead_in_para(doc, lead, body):
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(10)
+    p.paragraph_format.line_spacing = 1.28
+    # colour severity tags if present
+    color = ROYAL
+    if lead.startswith("[HIGH]"):
+        color = RED
+    elif lead.startswith("[MEDIUM]"):
+        color = AMBER
+    elif lead.startswith("[LOW]"):
+        color = GREEN
+    rl = p.add_run(lead + " ")
+    _set_font(rl, BODY, 10.5, bold=True, color=color)
+    rb = p.add_run(body)
+    _set_font(rb, BODY, 10.5, color=INK)
+
+
+def _caption(doc, text):
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    p.paragraph_format.space_after = Pt(5)
+    _keep_with_next(p)
+    r = p.add_run(text)
+    _set_font(r, BODY, 8.5, bold=True, color=GRAY, small_caps=True, spacing=15)
+
+
+def _source_note(doc, text):
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(4)
+    p.paragraph_format.space_after = Pt(12)
+    r = p.add_run("Source: " + text)
+    _set_font(r, BODY, 8, italic=True, color=GRAYLT)
+
+
+# ----------------------------------------------------------------- exhibits/tables
+def _exhibit_trend(doc, ex):
+    _caption(doc, ex["caption"])
+    n = len(ex["labels"])
+    tbl = doc.add_table(rows=2, cols=n)
+    tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _set_col_widths(tbl, [CONTENT_W // n] * n)
+    for i, lab in enumerate(ex["labels"]):
+        c = tbl.rows[0].cells[i]
+        _shade(c, NAVY); _cell_margins(c)
+        c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        pp = c.paragraphs[0]; pp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r = pp.add_run(lab); _set_font(r, BODY, 9.5, bold=True, color=WHITE)
+    for i, val in enumerate(ex["values"]):
+        c = tbl.rows[1].cells[i]
+        _shade(c, SOFT); _cell_margins(c, top=80, bottom=80)
+        c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        pp = c.paragraphs[0]; pp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r = pp.add_run(val); _set_font(r, HEAD, 14, bold=True, color=NAVY)
+    _no_split_rows(tbl)
+    _source_note(doc, ex["source"])
+
+
+def _exhibit_simple(doc, t):
+    """Generic table: first row = header (navy), optional highlight_row (data index)."""
+    _caption(doc, t["caption"])
+    header = t["header"]
+    rows = t["rows"]
+    ncol = len(header)
+    tbl = doc.add_table(rows=1 + len(rows), cols=ncol)
+    tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+    # column widths: first col wide if it's a label table; numbers get even share
+    if t.get("caption", "").startswith("Exhibit 4") or header[0] == "#":
+        widths = [560, 3200, 1320, 1080, 1080, 1080, 1040]
+        widths = widths[:ncol]
+        diff = CONTENT_W - sum(widths); widths[1] += diff
+    elif header[0] in ("Channel", "Metric"):
+        first = 2600
+        rest = (CONTENT_W - first) // (ncol - 1)
+        widths = [first] + [rest] * (ncol - 1)
+        widths[-1] += CONTENT_W - sum(widths)
     else:
-        _run(p, text, bold=True, color=C_ROYAL, size=Pt(13), font="Poppins")
-    _keep_next(p)
-    rule = _add_rule(doc, "164E96" if level == 1 else "DCE2EC", thickness_pt=2 if level == 1 else 1)
-    _keep_next(rule)
-    return p
+        even = CONTENT_W // ncol
+        widths = [even] * ncol
+        widths[-1] += CONTENT_W - sum(widths)
+    _set_col_widths(tbl, widths)
+
+    numeric_from = 1  # right-align columns after the first
+    for i, htxt in enumerate(header):
+        c = tbl.rows[0].cells[i]
+        _shade(c, NAVY); _cell_margins(c)
+        c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        pp = c.paragraphs[0]
+        pp.alignment = WD_ALIGN_PARAGRAPH.LEFT if i < numeric_from else WD_ALIGN_PARAGRAPH.RIGHT
+        r = pp.add_run(str(htxt)); _set_font(r, BODY, 9, bold=True, color=WHITE)
+
+    hi = t.get("highlight_row", -1)
+    for ridx, row in enumerate(rows):
+        zebra = CARD if (ridx % 2 == 1) else WHITE
+        fill = SOFT if ridx == hi else zebra
+        for i, val in enumerate(row):
+            c = tbl.rows[ridx + 1].cells[i]
+            _shade(c, fill); _cell_margins(c)
+            _row_bottom_border(c, color=LINE, size=4)
+            c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+            pp = c.paragraphs[0]
+            pp.alignment = WD_ALIGN_PARAGRAPH.LEFT if i < numeric_from else WD_ALIGN_PARAGRAPH.RIGHT
+            is_hi = ridx == hi
+            r = pp.add_run(str(val))
+            _set_font(r, BODY, 9.5, bold=is_hi, color=(ROYAL if is_hi else INK))
+    _no_split_rows(tbl)
+    if t.get("source"):
+        _source_note(doc, t["source"])
+    else:
+        sp = doc.add_paragraph(); sp.paragraph_format.space_after = Pt(12)
 
 
-def _body(doc, text: str, *, color=None, size=Pt(10.5), italic=False, before=40, after=80):
-    p = doc.add_paragraph()
-    _para_spacing(p, before=before, after=after, line=276)  # 276 twips ≈ 1.15× line
-    _run(p, text, color=color or C_INK, size=size, italic=italic)
-    return p
+def _exhibit_comparison(doc, ex):
+    _caption(doc, ex["caption"])
+    cols = ex["cols"]          # company names
+    rows = ex["rows"]          # [label, (val,rank)*4]
+    ncol = 1 + len(cols)
+    tbl = doc.add_table(rows=1 + len(rows), cols=ncol)
+    tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    first = 2300
+    rest = (CONTENT_W - first) // len(cols)
+    widths = [first] + [rest] * len(cols)
+    widths[-1] += CONTENT_W - sum(widths)
+    _set_col_widths(tbl, widths)
+
+    # header row
+    hc = tbl.rows[0].cells[0]
+    _shade(hc, WHITE); _cell_margins(hc)
+    pp = hc.paragraphs[0]; r = pp.add_run("Metric")
+    _set_font(r, BODY, 9, bold=True, color=GRAY, small_caps=True, spacing=15)
+    for j, name in enumerate(cols):
+        c = tbl.rows[0].cells[j + 1]
+        _shade(c, NAVY if j == 0 else CARD); _cell_margins(c)
+        c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        pp = c.paragraphs[0]; pp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r = pp.add_run(name)
+        _set_font(r, BODY, 9.5, bold=True, color=(WHITE if j == 0 else NAVY))
+
+    for ridx, row in enumerate(rows):
+        label = row[0]
+        c = tbl.rows[ridx + 1].cells[0]
+        _shade(c, WHITE); _cell_margins(c); _row_bottom_border(c)
+        c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        pp = c.paragraphs[0]; r = pp.add_run(label)
+        _set_font(r, BODY, 9.5, color=GRAY)
+        for j in range(len(cols)):
+            val, rank = row[j + 1]
+            c = tbl.rows[ridx + 1].cells[j + 1]
+            _shade(c, SOFT if j == 0 else WHITE); _cell_margins(c); _row_bottom_border(c)
+            c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+            pp = c.paragraphs[0]; pp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = pp.add_run(val + "  ")
+            _set_font(r, BODY, 9.5, bold=(j == 0), color=(ROYAL if j == 0 else INK))
+            rr = pp.add_run(rank)
+            _set_font(rr, BODY, 8, color=GRAYLT)
+    _no_split_rows(tbl)
+    _source_note(doc, ex["source"])
 
 
-def _label(doc, text: str, color=None):
-    p = doc.add_paragraph()
-    _para_spacing(p, before=0, after=20)
-    _run(p, text.upper(), bold=True, color=color or C_GRAY_LT, size=Pt(8.5), font="Inter")
-    return p
-
-
-# ── Page layout ───────────────────────────────────────────────────────────────
-
-def _set_margins(doc):
-    for section in doc.sections:
-        section.top_margin    = Inches(0.85)
-        section.bottom_margin = Inches(0.85)
-        section.left_margin   = Inches(1.0)
-        section.right_margin  = Inches(1.0)
-
-
-# ── Cover block ───────────────────────────────────────────────────────────────
-
-def _build_cover(doc):
-    meta = REPORT["meta"]
-
-    # eyebrow
-    ey = doc.add_paragraph()
-    _para_spacing(ey, before=0, after=80)
-    _run(ey, f"{meta['org'].upper()}  ·  {meta['period']}",
-         bold=True, color=C_ROYAL, size=Pt(9.5), font="Inter")
-
-    # title
-    t = doc.add_paragraph()
-    _para_spacing(t, before=80, after=60)
-    _run(t, meta["title"], bold=True, color=C_NAVY, size=Pt(26), font="Poppins")
-
-    # subtitle
-    _body(doc, meta["subtitle"], color=C_GRAY, size=Pt(12), before=0, after=40)
-
-    _add_rule(doc, "164E96", thickness_pt=3)
-
-    # author + date on same line via tab
-    p = doc.add_paragraph()
-    _para_spacing(p, before=60, after=240)
-    _run(p, meta["author"], color=C_INK, size=Pt(10))
-    _run(p, f"   ·   {meta['date']}", color=C_GRAY_LT, size=Pt(10))
-
-
-# ── KPI table ─────────────────────────────────────────────────────────────────
-
-def _build_kpis(doc):
-    _heading(doc, "Key Performance Indicators", level=1)
-
-    kpis = REPORT["kpis"]
-    table = doc.add_table(rows=2, cols=len(kpis))
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    _set_table_border(table, "DCE2EC", sz=4)
-    _set_col_widths(table, [1.55] * len(kpis))
-    _set_cant_split(table)
-
-    # header row — metric labels
-    for i, k in enumerate(kpis):
-        cell = table.cell(0, i)
-        _set_cell_bg(cell, "0C2340")
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(p, k["label"].upper(), bold=True, color=C_WHITE, size=Pt(9), font="Inter")
-        cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-
-    # value row
-    for i, k in enumerate(kpis):
-        cell = table.cell(1, i)
-        _set_cell_bg(cell, "E8F0FC" if i == 0 else "F6F8FC")
-        cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(p, k["value"] + "\n", bold=True, color=C_NAVY, size=Pt(18), font="Poppins")
-        _run(p, "▲ " + k["delta"], color=C_GREEN, size=Pt(9), font="Inter")
-
-    for cell in table.rows[-1].cells:
-        for p in cell.paragraphs:
-            _keep_next(p)
-    doc.add_paragraph()  # breathing room
-
-
-# ── Executive summary (SCR) ───────────────────────────────────────────────────
-
-def _build_exec_summary(doc):
-    _heading(doc, "Executive Summary", level=1)
-    _body(doc,
-          "BRI Life captured 11.4% of new APE in FY2024, driven by bancassurance acceleration "
-          "across BRI's 33,000-outlet network.",
-          before=0, after=120)
-
-    for item in REPORT["scr"]:
-        color_map = {"Situation": C_ROYAL, "Complication": C_AMBER, "Resolution": C_GREEN}
-        tag_color = color_map.get(item["tag"], C_ROYAL)
-
-        # tag + figure on one line
+# ----------------------------------------------------------------- recs & methodology
+def _build_recommendations(doc, section):
+    _section_heading(doc, section["num"], section["title"])
+    _intro_para(doc, section["intro"])
+    for i, rec in enumerate(section["recs"], start=1):
         p = doc.add_paragraph()
-        _para_spacing(p, before=120, after=20)
-        _run(p, item["tag"].upper() + "  ", bold=True, color=tag_color, size=Pt(10), font="Inter")
-        _run(p, item["fig"], bold=True, color=C_NAVY, size=Pt(22), font="Poppins")
+        p.paragraph_format.space_before = Pt(8)
+        p.paragraph_format.space_after = Pt(4)
+        _keep_with_next(p)
+        rn = p.add_run(f"Priority {i} — ")
+        _set_font(rn, BODY, 10.5, bold=True, color=ROYAL)
+        rt = p.add_run(rec["title"])
+        _set_font(rt, BODY, 10.5, bold=True, color=NAVY)
 
-        # fig label
-        fl = doc.add_paragraph()
-        _para_spacing(fl, before=0, after=40)
-        _run(fl, item["fig_label"], italic=True, color=C_GRAY, size=Pt(9), font="Inter")
+        b = doc.add_paragraph()
+        b.paragraph_format.space_after = Pt(4)
+        b.paragraph_format.line_spacing = 1.26
+        r = b.add_run(rec["body"])
+        _set_font(r, BODY, 10.5, color=INK)
 
-        # body
-        _body(doc, item["body"], before=0, after=100)
+        m = doc.add_paragraph()
+        m.paragraph_format.space_after = Pt(10)
+        for lbl, val in (("Owner", rec["owner"]), ("Timeline", rec["timeline"]),
+                         ("Target", rec["metric"])):
+            rk = m.add_run(f"{lbl}: ")
+            _set_font(rk, BODY, 9, bold=True, color=GRAY, small_caps=True, spacing=10)
+            rv = m.add_run(val + "     ")
+            _set_font(rv, BODY, 9.5, color=INK)
 
-        # subtle rule between SCR items (not after last)
-        if item != REPORT["scr"][-1]:
-            _add_rule(doc, "DCE2EC", thickness_pt=1)
 
+def _build_methodology(doc, meth):
+    h = doc.add_paragraph()
+    h.paragraph_format.space_before = Pt(18)
+    h.paragraph_format.space_after = Pt(10)
+    _keep_with_next(h)
+    r = h.add_run("Methodology & Data Sources")
+    _set_font(r, HEAD, 15, bold=True, color=NAVY)
+    _para_rule(h, color=NAVY, size=6, space=4, edge="bottom")
 
-# ── Market context ────────────────────────────────────────────────────────────
-
-def _build_market(doc):
-    _heading(doc, "Market Context", level=1)
-    _body(doc, REPORT["market"]["headline"], before=0, after=100)
-    for f in REPORT["market"]["facts"]:
+    _intro_para(doc, meth["intro"])
+    for i, src in enumerate(meth["sources"], start=1):
         p = doc.add_paragraph()
-        _para_spacing(p, before=80, after=20)
-        _run(p, f["h"] + "  ", bold=True, color=C_NAVY, size=Pt(11), font="Poppins")
-        _body(doc, f["b"], before=0, after=60)
+        p.paragraph_format.left_indent = Pt(14)
+        p.paragraph_format.space_after = Pt(5)
+        rn = p.add_run(f"{i}.  ")
+        _set_font(rn, BODY, 10, bold=True, color=ROYAL)
+        rt = p.add_run(src)
+        _set_font(rt, BODY, 10, color=INK)
 
 
-# ── Channel deep-dive ─────────────────────────────────────────────────────────
+# ----------------------------------------------------------------- main build
+def build(report=None, out_dir=None):
+    """Render the report. If `report` is None, use the static REPORT (BRI Life
+    briefing). Pass a dict in the same schema to render a dynamic/session report."""
+    R = report if report is not None else REPORT
+    out_dir = Path(out_dir) if out_dir else (Path(__file__).resolve().parent / "out")
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-def _build_channels(doc):
-    _heading(doc, "Performance Deep Dive — Distribution Channels", level=1)
-    ch = REPORT["channels"]
-    _body(doc, ch["headline"], before=0, after=40)
-    _body(doc, ch["subtitle"], italic=True, color=C_GRAY, size=Pt(9.5), before=0, after=100)
-
-    # channel table: label | FY23 | FY24 | change
-    table = doc.add_table(rows=len(ch["labels"]) + 1, cols=4)
-    _set_table_border(table, "DCE2EC", sz=4)
-    _set_col_widths(table, [2.0, 1.5, 1.5, 1.4])
-    _set_cant_split(table)
-
-    # header
-    for ci, hdr in enumerate(["Channel", "FY2023 (Rp T)", "FY2024 (Rp T)", "Change"]):
-        cell = table.cell(0, ci)
-        _set_cell_bg(cell, "0C2340")
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER if ci > 0 else WD_ALIGN_PARAGRAPH.LEFT
-        _run(p, hdr, bold=True, color=C_WHITE, size=Pt(9.5), font="Inter")
-
-    for ri, label in enumerate(ch["labels"]):
-        fy23 = ch["fy23"][ri]
-        fy24 = ch["fy24"][ri]
-        pct = round((fy24 - fy23) / fy23 * 100, 1)
-        change = f"+{pct}%" if pct >= 0 else f"{pct}%"
-        change_color = C_GREEN if pct >= 0 else C_RED
-        bg = "E8F0FC" if label == "Bancassurance" else "FFFFFF"
-        for ci, (val, align) in enumerate([
-            (label,      WD_ALIGN_PARAGRAPH.LEFT),
-            (str(fy23),  WD_ALIGN_PARAGRAPH.CENTER),
-            (str(fy24),  WD_ALIGN_PARAGRAPH.CENTER),
-            (change,     WD_ALIGN_PARAGRAPH.CENTER),
-        ]):
-            cell = table.cell(ri + 1, ci)
-            _set_cell_bg(cell, bg)
-            p = cell.paragraphs[0]
-            p.alignment = align
-            col = C_ROYAL if label == "Bancassurance" else (change_color if ci == 3 else C_INK)
-            _run(p, val, bold=(label == "Bancassurance"), color=col, size=Pt(10), font="Inter")
-
-    for cell in table.rows[-1].cells:
-        for p in cell.paragraphs:
-            _keep_next(p)
-    doc.add_paragraph()
-
-    _heading(doc, "Key Insights", level=2)
-    for ins in ch["insights"]:
-        p = doc.add_paragraph()
-        _para_spacing(p, before=80, after=20)
-        _run(p, ins["h"] + "  ", bold=True, color=C_NAVY, size=Pt(11), font="Poppins")
-        _body(doc, ins["b"], before=0, after=60)
-
-
-# ── Competitive comparison ────────────────────────────────────────────────────
-
-def _build_comparison(doc):
-    _heading(doc, "Competitive Comparison", level=1)
-    cmp = REPORT["compare"]
-    _body(doc, cmp["headline"], before=0, after=100)
-
-    cols = cmp["cols"]
-    hl   = cmp["highlight"]
-
-    table = doc.add_table(rows=len(cmp["rows"]) + 1, cols=len(cols) + 1)
-    _set_table_border(table, "DCE2EC", sz=4)
-    _set_col_widths(table, [1.8, 1.25, 1.15, 1.15, 1.05])
-    _set_cant_split(table)
-
-    # header
-    cell = table.cell(0, 0)
-    _set_cell_bg(cell, "0C2340")
-    _run(cell.paragraphs[0], "METRIC", bold=True, color=C_WHITE, size=Pt(9), font="Inter")
-    for ci, col in enumerate(cols):
-        cell = table.cell(0, ci + 1)
-        _set_cell_bg(cell, "0C2340" if ci == hl else "1A2230")
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(p, col, bold=True, color=C_WHITE, size=Pt(10), font="Poppins")
-
-    for ri, row in enumerate(cmp["rows"]):
-        # metric label
-        cell = table.cell(ri + 1, 0)
-        _set_cell_bg(cell, "F6F8FC")
-        _run(cell.paragraphs[0], row["metric"], color=C_GRAY, size=Pt(10), font="Inter")
-        for ci, (val, rnk) in enumerate(zip(row["values"], row["rank"])):
-            cell = table.cell(ri + 1, ci + 1)
-            _set_cell_bg(cell, "E8F0FC" if ci == hl else "FFFFFF")
-            p = cell.paragraphs[0]
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            _run(p, val + " ", bold=(ci == hl), color=C_ROYAL if ci == hl else C_INK,
-                 size=Pt(10.5), font="Inter")
-            _run(p, rnk, color=C_GRAY_LT, size=Pt(8.5), font="Inter")
-
-    for cell in table.rows[-1].cells:
-        for p in cell.paragraphs:
-            _keep_next(p)
-    spacer = doc.add_paragraph()
-    _keep_next(spacer)
-    # readout band
-    ro = doc.add_paragraph()
-    _para_spacing(ro, before=80, after=80)
-    _run(ro, "STRATEGIC READOUT  ", bold=True, color=C_ROYAL, size=Pt(9), font="Inter")
-    _run(ro, cmp["readout"], color=C_INK, size=Pt(10), font="Inter")
-
-
-# ── Top-10 peers ──────────────────────────────────────────────────────────────
-
-def _build_peers(doc):
-    _heading(doc, "Top 10 League Table", level=1)
-    peers = REPORT["peers"]
-    _body(doc, peers["headline"], before=0, after=40)
-    _body(doc, "Sorted by APE (Annualized Premium Equivalent), in Rp Trillion",
-          italic=True, color=C_GRAY, size=Pt(9.5), before=0, after=100)
-
-    hl = peers["highlight_row"]
-    table = doc.add_table(rows=len(peers["rows"]) + 1, cols=len(peers["header"]))
-    _set_table_border(table, "DCE2EC", sz=4)
-    # #  Company  APE  YoY  RBC  Share  Claim
-    _set_col_widths(table, [0.3, 2.35, 0.85, 0.65, 0.7, 0.65, 0.7])
-    _set_cant_split(table)
-
-    # header
-    for ci, hdr in enumerate(peers["header"]):
-        cell = table.cell(0, ci)
-        _set_cell_bg(cell, "0C2340")
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.LEFT if ci <= 1 else WD_ALIGN_PARAGRAPH.RIGHT
-        _run(p, hdr, bold=True, color=C_WHITE, size=Pt(9.5), font="Inter")
-
-    for ri, row in enumerate(peers["rows"]):
-        bg = "E8F0FC" if ri == hl else ("F7F9FC" if ri % 2 else "FFFFFF")
-        for ci, val in enumerate(row):
-            cell = table.cell(ri + 1, ci)
-            _set_cell_bg(cell, bg)
-            p = cell.paragraphs[0]
-            p.alignment = WD_ALIGN_PARAGRAPH.LEFT if ci <= 1 else WD_ALIGN_PARAGRAPH.RIGHT
-            _run(p, val,
-                 bold=(ri == hl),
-                 color=C_ROYAL if ri == hl else C_INK,
-                 size=Pt(10), font="Inter")
-
-    for cell in table.rows[-1].cells:
-        for p in cell.paragraphs:
-            _keep_next(p)
-    spacer = doc.add_paragraph()
-    _keep_next(spacer)
-    ro = doc.add_paragraph()
-    _para_spacing(ro, before=80, after=80)
-    _run(ro, "BRI LIFE — POSITIONING  ", bold=True, color=C_ROYAL, size=Pt(9), font="Inter")
-    _run(ro, peers["readout"], color=C_INK, size=Pt(10), font="Inter")
-
-
-# ── Watch areas ───────────────────────────────────────────────────────────────
-
-def _build_watch(doc):
-    _heading(doc, "Watch Areas", level=1)
-    _body(doc, "Three watch items that could materially shift the 2025 outlook.",
-          before=0, after=100)
-
-    for item in REPORT["watch"]:
-        sev_color = SEV_COLOR.get(item["color"], C_GRAY)
-        p = doc.add_paragraph()
-        _para_spacing(p, before=120, after=20)
-        _run(p, f"[{item['sev'].upper()}]  ", bold=True, color=sev_color, size=Pt(9.5), font="Inter")
-        _run(p, item["h"], bold=True, color=C_NAVY, size=Pt(12), font="Poppins")
-        _body(doc, item["b"], before=0, after=40)
-        meta = doc.add_paragraph()
-        _para_spacing(meta, before=0, after=80)
-        _run(meta, "OWNER  ", bold=True, color=C_GRAY_LT, size=Pt(8.5), font="Inter")
-        _run(meta, item["owner"] + "    ", color=C_INK, size=Pt(10), font="Inter")
-        _run(meta, "TRIGGER  ", bold=True, color=C_GRAY_LT, size=Pt(8.5), font="Inter")
-        _run(meta, item["trigger"], color=C_INK, size=Pt(10), font="Inter")
-        if item != REPORT["watch"][-1]:
-            _add_rule(doc, "DCE2EC", thickness_pt=1)
-
-
-# ── Recommendations ───────────────────────────────────────────────────────────
-
-def _build_recs(doc):
-    _heading(doc, "Priority Recommendations", level=1)
-    _body(doc,
-          "Three priority actions to convert FY2024 momentum into FY2025 market-share gains.",
-          before=0, after=100)
-
-    for rec in REPORT["recs"]:
-        p = doc.add_paragraph()
-        _para_spacing(p, before=120, after=20)
-        _run(p, f"PRIORITY {rec['n']}  ", bold=True, color=C_ROYAL, size=Pt(10), font="Inter")
-        _run(p, rec["h"], bold=True, color=C_NAVY, size=Pt(12), font="Poppins")
-        _body(doc, rec["b"], before=0, after=40)
-        meta = doc.add_paragraph()
-        _para_spacing(meta, before=0, after=40)
-        for label, val in [("OWNER", rec["owner"]), ("TIMELINE", rec["timeline"]), ("SUCCESS METRIC", rec["metric"])]:
-            _run(meta, label + "  ", bold=True, color=C_GRAY_LT, size=Pt(8.5), font="Inter")
-            _run(meta, val + "    ", color=C_INK, size=Pt(10), font="Inter")
-        if rec != REPORT["recs"][-1]:
-            _add_rule(doc, "DCE2EC", thickness_pt=1)
-
-
-# ── Master build ──────────────────────────────────────────────────────────────
-
-def build() -> Path:
-    _OUT_DIR.mkdir(parents=True, exist_ok=True)
     doc = Document()
-    _set_margins(doc)
+    style = doc.styles["Normal"]
+    style.font.name = BODY
+    style.font.size = Pt(10.5)
+    style.font.color.rgb = RGBColor.from_string(INK)
 
-    # Remove default blank paragraph
-    for p in doc.paragraphs:
-        p._element.getparent().remove(p._element)
+    section = doc.sections[0]
+    _setup_page(section)
 
-    _build_cover(doc)
-    doc.add_page_break()
+    meta = R["meta"]
+    _build_cover(doc, meta, R.get("kpis", []))
+    _build_header_footer(section, meta)   # applies to pages 2+
+    _build_contents(doc, R["sections"], include_methodology=("methodology" in R))
+    _build_exec_summary(doc, R["exec_summary"])
 
-    _build_exec_summary(doc)
-    doc.add_page_break()
+    for s in R["sections"]:
+        if "recs" in s:
+            _build_recommendations(doc, s)
+            continue
+        _section_heading(doc, s["num"], s["title"])
+        if s.get("intro"):
+            _intro_para(doc, s["intro"])
+        for lead, body in s.get("points", []):
+            _lead_in_para(doc, lead, body)
+        if "exhibit" in s:
+            ex = s["exhibit"]
+            if ex["type"] == "trend":
+                _exhibit_trend(doc, ex)
+            elif ex["type"] == "comparison":
+                _exhibit_comparison(doc, ex)
+            else:  # table / channel / generic
+                _exhibit_simple(doc, ex)
+        if "table" in s:
+            _exhibit_simple(doc, s["table"])
 
-    _build_kpis(doc)
-    doc.add_page_break()
+    if "methodology" in R:
+        _build_methodology(doc, R["methodology"])
 
-    _build_market(doc)
-    doc.add_page_break()
-
-    _build_channels(doc)
-    doc.add_page_break()
-
-    _build_comparison(doc)
-    doc.add_page_break()
-
-    _build_peers(doc)
-    doc.add_page_break()
-
-    _build_watch(doc)
-    doc.add_page_break()
-
-    _build_recs(doc)
-
-    doc.save(str(_OUT_FILE))
-    print(f"WROTE {_OUT_FILE}")
-    return _OUT_FILE
+    fname = meta.get("filename", "PolarisBI-BRILife-FY2024-Report.docx")
+    out_path = out_dir / fname
+    doc.save(str(out_path))
+    print(f"WROTE {out_path}")
+    return out_path
 
 
 if __name__ == "__main__":
-    build()
+    p = build()
+    print("WROTE", p)
