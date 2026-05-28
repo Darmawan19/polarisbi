@@ -10,6 +10,7 @@ Endpoints:
 import asyncio
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import AsyncGenerator
@@ -22,6 +23,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -248,6 +250,29 @@ async def ask_stream(req: AskRequest):
             }
 
     return EventSourceResponse(event_generator())
+
+
+# ── Report download ───────────────────────────────────────────────────────────
+
+_GEN = Path(__file__).resolve().parent.parent / "reporting" / "pptx_generator"
+_OUT = _GEN / "out"
+_PPTX = _OUT / "PolarisBI-BRILife-FY2024.pptx"
+_PDF  = _OUT / "PolarisBI-BRILife-FY2024.pdf"
+
+
+@app.post("/api/report")
+def generate_report(fmt: str = "pptx"):
+    if not _PPTX.exists():
+        subprocess.run(["node", "build.js"], cwd=str(_GEN), check=True)
+    target = _PDF if fmt == "pdf" else _PPTX
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="report not built")
+    media = (
+        "application/pdf"
+        if fmt == "pdf"
+        else "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    )
+    return FileResponse(str(target), media_type=media, filename=target.name)
 
 
 # ── Sparkline ─────────────────────────────────────────────────────────────────

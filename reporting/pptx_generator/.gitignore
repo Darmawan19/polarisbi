@@ -1,4 +1,6 @@
 node_modules/
-out/
+out/*.pptx
+out/*.pdf
+out/qa-*.png
 *.pptx
 .DS_Store
