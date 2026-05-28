@@ -81,6 +81,13 @@ def _set_table_border(table, hex_color: str = "DCE2EC", sz: int = 4):
     tblPr.append(tblBorders)
 
 
+def _set_col_widths(table, widths_in: list[float]):
+    """Apply column widths in inches to a table."""
+    for i, col in enumerate(table.columns):
+        if i < len(widths_in):
+            col.width = Inches(widths_in[i])
+
+
 def _para_spacing(para, before: int = 0, after: int = 0, line: int = None):
     pPr = para._p.get_or_add_pPr()
     spacing = OxmlElement("w:spacing")
@@ -208,6 +215,7 @@ def _build_kpis(doc):
     table = doc.add_table(rows=2, cols=len(kpis))
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     _set_table_border(table, "DCE2EC", sz=4)
+    _set_col_widths(table, [1.55] * len(kpis))
 
     # header row — metric labels
     for i, k in enumerate(kpis):
@@ -286,6 +294,7 @@ def _build_channels(doc):
     # channel table: label | FY23 | FY24 | change
     table = doc.add_table(rows=len(ch["labels"]) + 1, cols=4)
     _set_table_border(table, "DCE2EC", sz=4)
+    _set_col_widths(table, [2.0, 1.5, 1.5, 1.4])
 
     # header
     for ci, hdr in enumerate(["Channel", "FY2023 (Rp T)", "FY2024 (Rp T)", "Change"]):
@@ -337,6 +346,7 @@ def _build_comparison(doc):
 
     table = doc.add_table(rows=len(cmp["rows"]) + 1, cols=len(cols) + 1)
     _set_table_border(table, "DCE2EC", sz=4)
+    _set_col_widths(table, [1.8, 1.25, 1.15, 1.15, 1.05])
 
     # header
     cell = table.cell(0, 0)
@@ -383,6 +393,8 @@ def _build_peers(doc):
     hl = peers["highlight_row"]
     table = doc.add_table(rows=len(peers["rows"]) + 1, cols=len(peers["header"]))
     _set_table_border(table, "DCE2EC", sz=4)
+    # #  Company  APE  YoY  RBC  Share  Claim
+    _set_col_widths(table, [0.3, 2.35, 0.85, 0.65, 0.7, 0.65, 0.7])
 
     # header
     for ci, hdr in enumerate(peers["header"]):
