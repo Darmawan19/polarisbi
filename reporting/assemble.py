@@ -118,28 +118,81 @@ def _try_float(val) -> "float | None":
         return None
 
 
+_PERIOD_RE = re.compile(r"^\d{4}(Q[1-4]|H[12])?$")
+
+_QUESTION_KW_MAP = [
+    (re.compile(r"\b(premium|premi)\b",  re.I), "PREMI"),
+    (re.compile(r"\b(claim|klaim)\b",    re.I), "KLAIM"),
+    (re.compile(r"\b(ratio|rasio)\b",    re.I), "RASIO"),
+    (re.compile(r"\brbc\b",              re.I), "RBC"),
+    (re.compile(r"\bape\b",              re.I), "APE"),
+    (re.compile(r"\b(asset|aset)\b",     re.I), "ASET"),
+    (re.compile(r"\b(profit|laba)\b",    re.I), "LABA"),
+]
+
+
+def _find_period_col(columns: list[str], rows: list[dict]) -> "str | None":
+    """Return the first column that looks like a PERIODE axis, or None."""
+    for col in columns:
+        if col.upper().startswith("PERIODE"):
+            return col
+    # value-sniff: if every non-null value matches quarter/year pattern
+    for col in columns:
+        vals = [str(r.get(col, "")) for r in rows if r.get(col) is not None]
+        if vals and all(_PERIOD_RE.match(v) for v in vals):
+            return col
+    return None
+
+
+def _pick_measure_col(
+    question: str, columns: list[str], period_col: str, rows: list[dict]
+) -> "str | None":
+    """Pick the best single numeric measure column from non-period columns."""
+    candidates = [c for c in columns if c != period_col]
+
+    # Keyword preference: first candidate whose name contains a mapped keyword
+    for pattern, kw in _QUESTION_KW_MAP:
+        if pattern.search(question):
+            for col in candidates:
+                if kw in col.upper():
+                    floats = [_try_float(r.get(col)) for r in rows]
+                    if all(f is not None for f in floats):
+                        return col
+
+    # Fallback: first candidate whose values all parse to float
+    for col in candidates:
+        floats = [_try_float(r.get(col)) for r in rows]
+        if floats and all(f is not None for f in floats):
+            return col
+
+    return None
+
+
 def _infer_deck_exhibit(question: str, columns: list[str], rows: list[dict], idx: int) -> dict:
     """Build exhibit dict for the deck JSON schema.
-    Time-series (PERIODE + one numeric measure) → chart; else → table.
-    Falls back to table if any float parse fails.
+    Detects time-series by period column (name or value pattern) and picks the
+    best numeric measure column — keyword-matched to the question, else first
+    all-numeric candidate. Falls back to table for ranking/comparison results.
     """
     caption = f"Exhibit {idx} — {question}"
     source = "DuckDB · OJK-schema (synthetic, 2024Q1–2024Q4)"
 
-    is_time_series = len(columns) == 2 and columns[0].upper().startswith("PERIODE")
-    if is_time_series:
-        floats = [_try_float(r.get(columns[1])) for r in rows]
-        if all(f is not None for f in floats):
-            value_format = "#,##0.00" if any(abs(f) < 100 for f in floats) else "#,##0"
-            return {
-                "type": "chart",
-                "caption": caption,
-                "seriesName": columns[1],
-                "labels": [str(r.get(columns[0], "")) for r in rows],
-                "values": floats,
-                "valueFormat": value_format,
-                "source": source,
-            }
+    period_col = _find_period_col(columns, rows)
+    if period_col:
+        measure_col = _pick_measure_col(question, columns, period_col, rows)
+        if measure_col:
+            floats = [_try_float(r.get(measure_col)) for r in rows]
+            if all(f is not None for f in floats):
+                value_format = "#,##0.00" if any(abs(f) < 100 for f in floats) else "#,##0"
+                return {
+                    "type": "chart",
+                    "caption": caption,
+                    "seriesName": measure_col,
+                    "labels": [str(r.get(period_col, "")) for r in rows],
+                    "values": floats,
+                    "valueFormat": value_format,
+                    "source": source,
+                }
 
     table_rows = [[_fmt(c, r.get(c)) for c in columns] for r in rows[:10]]
     highlight = None
