@@ -8,3 +8,10 @@ data/raw/
 !polaris.duckdb
 .streamlit/secrets.toml
 .gstack/
+
+# generated report artifacts (tracked: out/icons/)
+reporting/**/out/*.pptx
+reporting/**/out/*.pdf
+reporting/**/out/*.docx
+reporting/**/out/qa-*.png
+reporting/document/out/
