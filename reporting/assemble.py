@@ -3,9 +3,11 @@ reporting/assemble.py — Dynamic report assembly from AI-session findings.
 
 Public API:
     assemble_report(findings, title="Insurance Data Briefing") -> dict
+    assemble_deck(findings, title="Insurance Data Briefing") -> dict
 
 findings: list of {"question": str, "sql": str | None}
-Returns a report dict in the exact schema build_docx.build() expects.
+assemble_report returns a report dict in the exact schema build_docx.build() expects.
+assemble_deck returns a dict in the schema build_session.js expects.
 """
 from __future__ import annotations
 
@@ -99,6 +101,113 @@ def _infer_exhibit(question: str, columns: list[str], rows: list[dict], idx: int
         "rows": [[_fmt(c, r.get(c)) for c in columns] for r in rows],
         "source": "DuckDB · OJK-schema (synthetic, 2024Q1–2024Q4)",
     }
+
+
+# ─────────────────────────────────────────── deck exhibit builder
+
+def _try_float(val) -> "float | None":
+    """Parse a raw DuckDB value to float. Returns None if unparseable."""
+    if isinstance(val, (int, float)):
+        return float(val)
+    if val is None:
+        return None
+    s = str(val).replace("Rp", "").replace("T", "").replace("%", "").replace(",", "").strip()
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return None
+
+
+def _infer_deck_exhibit(question: str, columns: list[str], rows: list[dict], idx: int) -> dict:
+    """Build exhibit dict for the deck JSON schema.
+    Time-series (PERIODE + one numeric measure) → chart; else → table.
+    Falls back to table if any float parse fails.
+    """
+    caption = f"Exhibit {idx} — {question}"
+    source = "DuckDB · OJK-schema (synthetic, 2024Q1–2024Q4)"
+
+    is_time_series = len(columns) == 2 and columns[0].upper().startswith("PERIODE")
+    if is_time_series:
+        floats = [_try_float(r.get(columns[1])) for r in rows]
+        if all(f is not None for f in floats):
+            value_format = "#,##0.00" if any(abs(f) < 100 for f in floats) else "#,##0"
+            return {
+                "type": "chart",
+                "caption": caption,
+                "seriesName": columns[1],
+                "labels": [str(r.get(columns[0], "")) for r in rows],
+                "values": floats,
+                "valueFormat": value_format,
+                "source": source,
+            }
+
+    table_rows = [[_fmt(c, r.get(c)) for c in columns] for r in rows[:10]]
+    highlight = None
+    for ri, r in enumerate(rows[:10]):
+        if "bri life" in str(r.get(columns[0], "")).lower():
+            highlight = ri
+            break
+    ex: dict = {
+        "type": "table",
+        "caption": caption,
+        "header": columns,
+        "rows": table_rows,
+        "source": source,
+    }
+    if highlight is not None:
+        ex["highlightRow"] = highlight
+    return ex
+
+
+# ─────────────────────────────────────────── shared per-finding pipeline
+
+def _run_pipeline(
+    findings: list[dict],
+) -> "list[tuple[str, list[str], list[dict], str, str, str]]":
+    """Generate SQL → safety-check → execute → LLM insight for each finding.
+    Returns list of (question, columns, rows, lead_in, analysis, sql).
+    """
+    processed = []
+    for idx, f in enumerate(findings, start=1):
+        question = f.get("question", "").strip()
+        if not question:
+            print(f"[assemble] Finding {idx}: empty question, skipping.")
+            continue
+
+        sql = f.get("sql") or None
+        if not sql:
+            try:
+                sql, _ = generate_sql(question)
+                print(f"[assemble] Finding {idx} SQL generated:\n{sql}")
+            except Exception as exc:
+                print(f"[assemble] Finding {idx}: SQL generation failed — {exc}")
+                continue
+        else:
+            print(f"[assemble] Finding {idx} SQL (provided):\n{sql}")
+
+        ok, reason = _is_safe(sql)
+        if not ok:
+            print(f"[assemble] Finding {idx} SKIPPED — {reason}")
+            continue
+
+        try:
+            rows, columns = execute_sql(sql)
+        except Exception as exc:
+            print(f"[assemble] Finding {idx}: SQL execution failed — {exc}")
+            continue
+
+        print(f"[assemble] Finding {idx}: {len(rows)} rows, columns={columns}")
+        if not rows:
+            print(f"[assemble] Finding {idx}: no rows returned, skipping.")
+            continue
+
+        try:
+            lead_in, analysis = _call_insight(question, columns, rows)
+        except Exception as exc:
+            lead_in, analysis = question, f"(LLM call failed: {exc})"
+
+        processed.append((question, columns, rows, lead_in, analysis, sql))
+    return processed
 
 
 # ─────────────────────────────────────────── JSON helpers
@@ -207,56 +316,9 @@ def assemble_report(
     Returns the dict schema build_docx.build() expects.
     """
     today = date.today().strftime("%B %Y")
-    # (question, columns, rows, lead_in, analysis, sql)
-    processed: list[tuple[str, list[str], list[dict], str, str, str]] = []
+    processed = _run_pipeline(findings)
 
-    for idx, f in enumerate(findings, start=1):
-        question = f.get("question", "").strip()
-        if not question:
-            print(f"[assemble] Finding {idx}: empty question, skipping.")
-            continue
-
-        sql = f.get("sql") or None
-
-        # 1. Generate SQL if not supplied
-        if not sql:
-            try:
-                sql, _ = generate_sql(question)
-                print(f"[assemble] Finding {idx} SQL generated:\n{sql}")
-            except Exception as exc:
-                print(f"[assemble] Finding {idx}: SQL generation failed — {exc}")
-                continue
-        else:
-            print(f"[assemble] Finding {idx} SQL (provided):\n{sql}")
-
-        # 2. Safety guard
-        ok, reason = _is_safe(sql)
-        if not ok:
-            print(f"[assemble] Finding {idx} SKIPPED — {reason}")
-            continue
-
-        # 3. Execute
-        try:
-            rows, columns = execute_sql(sql)
-        except Exception as exc:
-            print(f"[assemble] Finding {idx}: SQL execution failed — {exc}")
-            continue
-
-        print(f"[assemble] Finding {idx}: {len(rows)} rows, columns={columns}")
-
-        if not rows:
-            print(f"[assemble] Finding {idx}: no rows returned, skipping.")
-            continue
-
-        # 4. Per-finding LLM prose
-        try:
-            lead_in, analysis = _call_insight(question, columns, rows)
-        except Exception as exc:
-            lead_in, analysis = question, f"(LLM call failed: {exc})"
-
-        processed.append((question, columns, rows, lead_in, analysis, sql))
-
-    # 5. Synthesis (exec_summary + recommendations)
+    # Synthesis (exec_summary + recommendations)
     findings_data = [(q, li, an) for q, _, _, li, an, _ in processed]
     if findings_data:
         try:
@@ -274,7 +336,7 @@ def assemble_report(
         ]
         recs = []
 
-    # 6. Build sections
+    # Build sections
     sections: list[dict] = []
     for i, (question, columns, rows, lead_in, analysis, _sql) in enumerate(processed, start=1):
         sections.append({
@@ -315,4 +377,68 @@ def assemble_report(
             ),
             "sources": [f.get("question", "") for f in findings],
         },
+    }
+
+
+# ─────────────────────────────────────────── deck assembler
+
+def assemble_deck(
+    findings: list[dict],
+    title: str = "Insurance Data Briefing",
+) -> dict:
+    """
+    Assembles a deck JSON dict in the build_session.js schema from session findings.
+
+    findings: list of {"question": str, "sql": str | None}
+    Returns {"meta", "findings", "recommendations"}.
+    """
+    today = date.today().strftime("%B %Y")
+    processed = _run_pipeline(findings)
+
+    # Synthesis
+    findings_data = [(q, li, an) for q, _, _, li, an, _ in processed]
+    if findings_data:
+        try:
+            _exec_summary, recs = _call_synthesis(findings_data, title)
+        except Exception as exc:
+            print(f"[assemble_deck] synthesis failed — {exc}")
+            recs = []
+    else:
+        recs = []
+
+    # Build deck findings
+    deck_findings = []
+    for i, (question, columns, rows, lead_in, analysis, _sql) in enumerate(processed, start=1):
+        takeaway = lead_in.strip().strip("*").strip()
+        exhibit = _infer_deck_exhibit(question, columns, rows, i)
+        deck_findings.append({
+            "question": question,
+            "takeaway": takeaway,
+            "analysis": analysis,
+            "exhibit": exhibit,
+        })
+
+    # Transform recs to deck schema {n, h, b, owner, timeline, metric}
+    deck_recs = [
+        {
+            "n": str(i + 1),
+            "h": r.get("title", ""),
+            "b": r.get("body", ""),
+            "owner": r.get("owner", ""),
+            "timeline": r.get("timeline", ""),
+            "metric": r.get("metric", ""),
+        }
+        for i, r in enumerate(recs)
+    ]
+
+    return {
+        "meta": {
+            "eyebrow": "Generated from your AI session",
+            "title": title,
+            "subtitle": "Compiled from questions asked in the cockpit · live DuckDB data",
+            "author": "Lidharmawan Suryaatmadja",
+            "date": today,
+        },
+        "findings": deck_findings,
+        "recommendations": deck_recs,
     }

@@ -10,7 +10,10 @@ Endpoints:
 import asyncio
 import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import AsyncGenerator, Optional
 
@@ -282,6 +285,43 @@ def generate_report(
     fmt: str = "pptx",
     req: Optional[ReportRequest] = Body(default=None),
 ):
+    _DECK_DIR = Path(__file__).parent.parent / "reporting" / "pptx_generator"
+    _SESSION_PPTX = _DECK_DIR / "out" / "PolarisBI-Session-Deck.pptx"
+
+    # Session mode: findings present + deck kind
+    if req and req.findings and kind == "deck":
+        try:
+            from reporting.assemble import assemble_deck
+            raw_findings = [{"question": f.question, "sql": f.sql} for f in req.findings]
+            deck_data = assemble_deck(raw_findings, title=req.title or "Insurance Data Briefing")
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".json", delete=False, encoding="utf-8"
+            ) as tmp:
+                json.dump(deck_data, tmp, ensure_ascii=False)
+                tmp_path = tmp.name
+            node = shutil.which("node") or "node"
+            result = subprocess.run(
+                [node, "build_session.js", tmp_path, str(_SESSION_PPTX)],
+                cwd=str(_DECK_DIR),
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            os.unlink(tmp_path)
+            if result.returncode != 0:
+                raise RuntimeError(f"node build_session.js failed: {result.stderr}")
+            if fmt == "pdf":
+                from reporting import converters
+                path = converters.to_pdf(_SESSION_PPTX)
+            else:
+                path = _SESSION_PPTX
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"dynamic deck failed: {e}")
+        media = _MEDIA_TYPES.get(fmt, "application/octet-stream")
+        return FileResponse(str(path), media_type=media, filename=path.name)
+
     # Session mode: findings present + document kind
     if req and req.findings and kind == "document":
         try:
