@@ -33,6 +33,16 @@ const L = makeLib(pptx);
 
 let PAGE = 1; // cover is conceptual page 1; first content slide becomes 2
 
+// hard guarantee against overflow: clip to max chars at a word boundary + ellipsis
+function clip(str, max) {
+  if (str === null || str === undefined) return "";
+  str = String(str);
+  if (str.length <= max) return str;
+  const cut = str.slice(0, max);
+  const sp = cut.lastIndexOf(" ");
+  return (sp > max * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s.,;:]+$/, "") + "\u2026";
+}
+
 // ---- session footer (no SECTIONS navbar; left label + page block) -----------
 function sfooter(s, leftText) {
   L.hline(s, G.M, G.navY - 0.06, G.CW, C.line, 1);
@@ -160,32 +170,46 @@ function findingTable(f, i) {
 }
 
 // ============================================================ RECOMMENDATIONS
-function recsSlide(recs) {
+function recsSlide(recsIn) {
   const s = pptx.addSlide();
   schrome(s, { eyebrow: "Recommendations · Ask-AI",
     title: "What this suggests", source: "Synthesised from the findings above" });
 
-  const top = 2.15, gap = 0.18;
-  const ch = (6.3 - top - gap * (recs.length - 1)) / recs.length;
+  const recs = (recsIn || []).slice(0, 3); // cap so cards always have room
+  const top = 1.9, gap = 0.16, bottom = 6.5;
+  const n = Math.max(recs.length, 1);
+  const ch = (bottom - top - gap * (n - 1)) / n;
+
+  const numW = 1.15;
+  const bx = G.M + numW + 0.25;            // body column x
+  const metaW = 3.3, metaX = G.M + G.CW - metaW;
+  const bw = metaX - bx - 0.3;             // body column width
+
   recs.forEach((r, idx) => {
     const y = top + idx * (ch + gap);
     L.card(s, { x: G.M, y, w: G.CW, h: ch, fill: C.white, line: C.line });
-    L.rect(s, { x: G.M, y, w: 1.15, h: ch, fill: { color: C.royal }, line: { type: "none" } });
-    L.txt(s, "PRIORITY", { x: G.M, y: y + 0.18, w: 1.15, h: 0.24, align: "center",
+    L.rect(s, { x: G.M, y, w: numW, h: ch, fill: { color: C.royal }, line: { type: "none" } });
+    L.txt(s, "PRIORITY", { x: G.M, y: y + 0.16, w: numW, h: 0.22, align: "center",
       fontFace: F.bodySemi, fontSize: 8, color: "AFC6EA", charSpacing: 1.4 });
-    L.txt(s, String(r.n || idx + 1), { x: G.M, y: y + 0.34, w: 1.15, h: ch - 0.5, align: "center", valign: "middle",
-      fontFace: F.display, fontSize: 40, bold: true, color: C.white });
-    const tx = G.M + 1.4, tw = 6.7;
-    L.txt(s, r.h, { x: tx, y: y + 0.2, w: tw, h: 0.5, fontFace: F.semi, fontSize: 13, color: C.navy, lineSpacingMultiple: 1.0 });
-    L.txt(s, r.b, { x: tx, y: y + 0.76, w: tw, h: ch - 0.9, fontFace: F.body, fontSize: 10, color: C.ink, lineSpacingMultiple: 1.08 });
-    const mx = G.M + G.CW - 3.6, mw = 3.55;
-    const meta = [["OWNER", r.owner], ["TIMELINE", r.timeline], ["TARGET", r.metric]];
-    let my = y + 0.18;
+    L.txt(s, String(r.n || idx + 1), { x: G.M, y: y + 0.3, w: numW, h: ch - 0.46,
+      align: "center", valign: "middle", fontFace: F.display, fontSize: 38, bold: true, color: C.white });
+
+    // title (clipped + shrink) and body (clipped + shrink) — physically cannot leave the card
+    L.txt(s, clip(r.h, 78), { x: bx, y: y + 0.16, w: bw, h: 0.44,
+      fontFace: F.semi, fontSize: 12.5, color: C.navy, lineSpacingMultiple: 1.0, valign: "top", fit: "shrink" });
+    L.txt(s, clip(r.b, 240), { x: bx, y: y + 0.64, w: bw, h: ch - 0.78,
+      fontFace: F.body, fontSize: 10, color: C.ink, lineSpacingMultiple: 1.06, valign: "top", fit: "shrink" });
+
+    // meta column (each value clipped to one line + shrink)
+    const meta = [["OWNER", r.owner], ["TIMELINE", r.timeline], ["TARGET", r.metric]].filter((m) => m[1]);
+    const rh = (ch - 0.12) / Math.max(meta.length, 1);
+    let my = y + 0.16;
     meta.forEach(([lab, val]) => {
-      if (!val) return;
-      L.txt(s, lab, { x: mx, y: my, w: mw, h: 0.2, fontFace: F.bodySemi, fontSize: 8, color: C.royal, charSpacing: 1.2, bold: true });
-      L.txt(s, val, { x: mx, y: my + 0.17, w: mw, h: 0.26, fontFace: F.body, fontSize: 9, color: C.ink, lineSpacingMultiple: 1.0 });
-      my += 0.42;
+      L.txt(s, lab, { x: metaX, y: my, w: metaW, h: 0.18,
+        fontFace: F.bodySemi, fontSize: 8, color: C.royal, charSpacing: 1.2, bold: true });
+      L.txt(s, clip(val, 46), { x: metaX, y: my + 0.16, w: metaW, h: rh - 0.18,
+        fontFace: F.body, fontSize: 9, color: C.ink, lineSpacingMultiple: 1.0, valign: "top", fit: "shrink" });
+      my += rh;
     });
   });
 }

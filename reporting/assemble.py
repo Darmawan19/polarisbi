@@ -317,7 +317,12 @@ _SYNTHESIS_SYSTEM = (
     "- exec_summary: exactly 2 paragraphs synthesising all findings.\n"
     "- recommendations: 2-3 items grounded in the findings.\n"
     "- Never invent numbers not present in the findings.\n"
-    "- Return valid JSON. No ```json fences."
+    "- Return valid JSON. No ```json fences.\n"
+    "WORD-COUNT LIMITS (hard — renderer clips at these boundaries):\n"
+    "- body: ≤ 28 words. Stop the sentence if needed.\n"
+    "- owner: ≤ 8 words (e.g. 'Finance + Actuarial').\n"
+    "- timeline: ≤ 8 words (e.g. 'Q2 2025 rollout').\n"
+    "- metric: ≤ 8 words (e.g. 'Claim ratio below 115% by Q4')."
 )
 
 
