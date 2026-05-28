@@ -88,6 +88,21 @@ def _set_col_widths(table, widths_in: list[float]):
             col.width = Inches(widths_in[i])
 
 
+def _set_cant_split(table):
+    """Prevent any single row from splitting across a page boundary."""
+    for row in table.rows:
+        trPr = row._tr.get_or_add_trPr()
+        cs = OxmlElement("w:cantSplit")
+        trPr.append(cs)
+
+
+def _keep_next(para):
+    """Keep this paragraph on the same page as the one that follows it."""
+    pPr = para._p.get_or_add_pPr()
+    kn = OxmlElement("w:keepNext")
+    pPr.append(kn)
+
+
 def _para_spacing(para, before: int = 0, after: int = 0, line: int = None):
     pPr = para._p.get_or_add_pPr()
     spacing = OxmlElement("w:spacing")
@@ -150,7 +165,9 @@ def _heading(doc, text: str, level: int = 1):
         _run(p, text, bold=True, color=C_NAVY, size=Pt(16), font="Poppins")
     else:
         _run(p, text, bold=True, color=C_ROYAL, size=Pt(13), font="Poppins")
-    _add_rule(doc, "164E96" if level == 1 else "DCE2EC", thickness_pt=2 if level == 1 else 1)
+    _keep_next(p)
+    rule = _add_rule(doc, "164E96" if level == 1 else "DCE2EC", thickness_pt=2 if level == 1 else 1)
+    _keep_next(rule)
     return p
 
 
@@ -216,6 +233,7 @@ def _build_kpis(doc):
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     _set_table_border(table, "DCE2EC", sz=4)
     _set_col_widths(table, [1.55] * len(kpis))
+    _set_cant_split(table)
 
     # header row — metric labels
     for i, k in enumerate(kpis):
@@ -236,6 +254,9 @@ def _build_kpis(doc):
         _run(p, k["value"] + "\n", bold=True, color=C_NAVY, size=Pt(18), font="Poppins")
         _run(p, "▲ " + k["delta"], color=C_GREEN, size=Pt(9), font="Inter")
 
+    for cell in table.rows[-1].cells:
+        for p in cell.paragraphs:
+            _keep_next(p)
     doc.add_paragraph()  # breathing room
 
 
@@ -295,6 +316,7 @@ def _build_channels(doc):
     table = doc.add_table(rows=len(ch["labels"]) + 1, cols=4)
     _set_table_border(table, "DCE2EC", sz=4)
     _set_col_widths(table, [2.0, 1.5, 1.5, 1.4])
+    _set_cant_split(table)
 
     # header
     for ci, hdr in enumerate(["Channel", "FY2023 (Rp T)", "FY2024 (Rp T)", "Change"]):
@@ -324,6 +346,9 @@ def _build_channels(doc):
             col = C_ROYAL if label == "Bancassurance" else (change_color if ci == 3 else C_INK)
             _run(p, val, bold=(label == "Bancassurance"), color=col, size=Pt(10), font="Inter")
 
+    for cell in table.rows[-1].cells:
+        for p in cell.paragraphs:
+            _keep_next(p)
     doc.add_paragraph()
 
     _heading(doc, "Key Insights", level=2)
@@ -347,6 +372,7 @@ def _build_comparison(doc):
     table = doc.add_table(rows=len(cmp["rows"]) + 1, cols=len(cols) + 1)
     _set_table_border(table, "DCE2EC", sz=4)
     _set_col_widths(table, [1.8, 1.25, 1.15, 1.15, 1.05])
+    _set_cant_split(table)
 
     # header
     cell = table.cell(0, 0)
@@ -373,7 +399,11 @@ def _build_comparison(doc):
                  size=Pt(10.5), font="Inter")
             _run(p, rnk, color=C_GRAY_LT, size=Pt(8.5), font="Inter")
 
-    doc.add_paragraph()
+    for cell in table.rows[-1].cells:
+        for p in cell.paragraphs:
+            _keep_next(p)
+    spacer = doc.add_paragraph()
+    _keep_next(spacer)
     # readout band
     ro = doc.add_paragraph()
     _para_spacing(ro, before=80, after=80)
@@ -395,6 +425,7 @@ def _build_peers(doc):
     _set_table_border(table, "DCE2EC", sz=4)
     # #  Company  APE  YoY  RBC  Share  Claim
     _set_col_widths(table, [0.3, 2.35, 0.85, 0.65, 0.7, 0.65, 0.7])
+    _set_cant_split(table)
 
     # header
     for ci, hdr in enumerate(peers["header"]):
@@ -416,7 +447,11 @@ def _build_peers(doc):
                  color=C_ROYAL if ri == hl else C_INK,
                  size=Pt(10), font="Inter")
 
-    doc.add_paragraph()
+    for cell in table.rows[-1].cells:
+        for p in cell.paragraphs:
+            _keep_next(p)
+    spacer = doc.add_paragraph()
+    _keep_next(spacer)
     ro = doc.add_paragraph()
     _para_spacing(ro, before=80, after=80)
     _run(ro, "BRI LIFE — POSITIONING  ", bold=True, color=C_ROYAL, size=Pt(9), font="Inter")
@@ -497,6 +532,8 @@ def build() -> Path:
     doc.add_page_break()
 
     _build_comparison(doc)
+    doc.add_page_break()
+
     _build_peers(doc)
     doc.add_page_break()
 
