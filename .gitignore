@@ -15,3 +15,7 @@ reporting/**/out/*.pdf
 reporting/**/out/*.docx
 reporting/**/out/qa-*.png
 reporting/document/out/
+data/
+*.db
+*.db-wal
+*.db-shm

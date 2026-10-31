@@ -2,7 +2,8 @@
 PolarisBI FastAPI bridge.
 
 Endpoints:
-- GET  /api/health            → health check
+- GET  /health                → public liveness probe (no login)
+- GET  /api/health            → health check (login required)
 - GET  /api/schema            → DuckDB schema description
 - POST /api/ask/stream        → SSE streaming: question → SQL → rows → insight
 """
@@ -30,6 +31,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from agent.sql_agent import generate_sql
+from polaris_auth import setup_auth
 from reporting import service as reporting_service
 from database.setup import get_schema_description
 
@@ -56,19 +58,30 @@ app = FastAPI(
     version="0.2.0",
 )
 
+# Explicit origin list (no "*") so the httpOnly login cookie is accepted by browsers.
+# Override with CORS_ORIGINS="https://a,https://b".
+_DEFAULT_CORS_ORIGINS = ",".join([
+    "http://localhost:3000",
+    "https://polarisbi-frontend.vercel.app",
+    "https://polarisbi-frontend-darmawan19.vercel.app",
+    "https://polarisbi-frontend-git-master-darmawan19.vercel.app",
+])
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",
-        "https://polarisbi-frontend.vercel.app",
-        "https://polarisbi-frontend-darmawan19.vercel.app",
-        "https://polarisbi-frontend-git-master-darmawan19.vercel.app",
+        o.strip()
+        for o in os.getenv("CORS_ORIGINS", _DEFAULT_CORS_ORIGINS).split(",")
+        if o.strip() and o.strip() != "*"
     ],
-    allow_origin_regex=r"https://polarisbi-frontend.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
+
+# Login, server-side sessions, roles, audit. Guards every /api/* route.
+setup_auth(app)
 
 
 class AskRequest(BaseModel):
@@ -146,6 +159,12 @@ Berikan insight."""
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.get("/health")
+async def public_health():
+    """Public liveness probe (outside /api, so no login). Deliberately minimal."""
+    return {"status": "ok"}
+
 
 @app.get("/api/health")
 async def health():
