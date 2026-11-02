@@ -31,6 +31,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from agent.sql_agent import generate_sql
+from insight import setup_insight
 from polaris_auth import setup_auth
 from reporting import service as reporting_service
 from database.setup import get_schema_description
@@ -82,6 +83,9 @@ app.add_middleware(
 
 # Login, server-side sessions, roles, audit. Guards every /api/* route.
 setup_auth(app)
+
+# Insight Hub: berita & data publik + brief risiko. Rute /api/insight/* (terlindungi oleh auth di atas).
+setup_insight(app)
 
 
 class AskRequest(BaseModel):

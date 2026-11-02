@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+    <?xml-stylesheet type="text/xsl" href="/cap/nowcast-rss-style.xsl"?>
+    <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+        <channel>
+            <title>Peringatan Dini Cuaca BMKG</title>
+            <link>https://www.bmkg.go.id/alerts/nowcast/id/rss.xml</link>
+            <description>Peringatan Dini Cuaca dari BMKG (Badan Meteorologi, Klimatologi, dan Geofisika)</description>
+            <atom:link href="https://www.bmkg.go.id/alerts/nowcast/id/rss.xml" rel="self" type="application/rss+xml"/>
+            <language>id</language>
+            <copyright>public domain</copyright>
+            <pubDate>Mon, 02 Nov 2026 18:00:21 +0000</pubDate>
+            <lastBuildDate>Mon, 02 Nov 2026 18:00:21 +0000</lastBuildDate>
+            <docs>http://blogs.law.harvard.edu/tech/rss</docs>
+            
+        <item>
+            <title>Hujan Lebat disertai Petir di Sulawesi Barat</title>
+            <link>https://www.bmkg.go.id/alerts/nowcast/id/CSK20261102005_alert.xml</link>
+            <description>Hujan lebat disertai petir akan terjadi pada 03 November 2026, 01:58 WITA di sebagian wilayah Sulawesi Barat, khususnya di BANGGAE, BANGGAE TIMUR.
+ Kondisi ini berpotensi menimbulkan dampak berupa jarak pandang berkurang, angin kencang, dan banjir lokal.
+ Masyarakat dihimbau untuk tetap waspada, mengurangi aktivitas di luar ruangan, serta mengambil langkah-langkah pencegahan yang diperlukan guna menjaga keselamatan.
+ Kondisi diperkirakan dapat berlangsung hingga 03 November 2026, 03:22 WITA.</description>
+            <author>cuaca.ekstrem@bmkg.go.id (BMKG)</author>
+            <category>Met</category>
+            <guid isPermaLink="false">2.49.0.1.360.0.2026.11.02.18.76.005</guid>
+            <pubDate>Tue, 03 Nov 2026 01:46:00 +0800</pubDate>
+        </item>
+
+        <item>
+            <title>Hujan Lebat disertai Petir di Sulawesi Selatan</title>
+            <link>https://www.bmkg.go.id/alerts/nowcast/id/CSL20261102006_alert.xml</link>
+            <description>Hujan lebat disertai petir akan terjadi pada 03 November 2026, 02:00 WITA di sebagian wilayah Sulawesi Selatan, khususnya di BAEBUNTA, BAJO, BALUSU, BANGKELEKILA, BARUPPU, BELOPA, BELOPA UTARA, BUNTU PEPASAN, CEMPA, CINA, DUAMPANUA, KAPALA PITU, LAMASI, LAMASI TIMUR, LAROMPONG, LAROMPONG SELATAN, MALANGKE BARAT, MARE, MATIRRO SOMPE, PALETEANG, PATAMPANUA, PITUMPANUA, RANTEPAO, RINDINGALLO, RONGKONG, SABBANG, SESEAN, SESEAN SULOARA, SIBULUE, SULI, SULI BARAT, TALLUNGLIPU, TELLUWANUA, TIKALA, TIROANG, TONDON, TONRA, WALENRANG, WALENRANG TIMUR, WALENRANG UTARA, WATANG SAWITO.
+ Kondisi ini berpotensi menimbulkan dampak berupa jarak pandang berkurang, angin kencang, dan banjir lokal.
+ Masyarakat dihimbau untuk tetap waspada, mengurangi aktivitas di luar ruangan, serta mengambil langkah-langkah pencegahan yang diperlukan guna menjaga keselamatan.
+ Kondisi diperkirakan dapat berlangsung hingga 03 November 2026, 05:00 WITA.</description>
+            <author>cuaca.ekstrem@bmkg.go.id (BMKG)</author>
+            <category>Met</category>
+            <guid isPermaLink="false">2.49.0.1.360.0.2026.11.02.18.73.006</guid>
+            <pubDate>Tue, 03 Nov 2026 01:30:00 +0800</pubDate>
+        </item>
+
+        <item>
+            <title>Hujan Lebat disertai Petir di Kalimantan Timur</title>
+            <link>https://www.bmkg.go.id/alerts/nowcast/id/CKT20261102006_alert.xml</link>
+            <description>Hujan lebat disertai petir akan terjadi pada 03 November 2026, 01:30 WITA di sebagian wilayah Kalimantan Timur, khususnya di BABULU, BATU SOPANG, KUARO, LONG IKIS, MUARA BADAK, TANJUNG HARAPAN.
+ Kondisi ini berpotensi menimbulkan dampak berupa jarak pandang berkurang, angin kencang, dan banjir lokal.
+ Masyarakat dihimbau untuk tetap waspada, mengurangi aktivitas di luar ruangan, serta mengambil langkah-langkah pencegahan yang diperlukan guna menjaga keselamatan.
+ Kondisi diperkirakan dapat berlangsung hingga 03 November 2026, 04:45 WITA.</description>
+            <author>cuaca.ekstrem@bmkg.go.id (BMKG)</author>
+            <category>Met</category>
+            <guid isPermaLink="false">2.49.0.1.360.0.2026.11.02.18.64.006</guid>
+            <pubDate>Tue, 03 Nov 2026 01:22:00 +0800</pubDate>
+        </item>
+
+        <item>
+            <title>Hujan Lebat disertai Petir di Kalimantan Tengah</title>
+            <link>https://www.bmkg.go.id/alerts/nowcast/id/CKG20261102009_alert.xml</link>
+            <description>Hujan lebat disertai petir akan terjadi pada 03 November 2026, 00:00 WIB di sebagian wilayah Kalimantan Tengah, khususnya di DUSUN UTARA, KAPUAS HULU, MANDAU TALAWANG, MIRI MANASA, PASAK TALAWANG, SERIBU RIAM.
+ Kondisi ini berpotensi menimbulkan dampak berupa jarak pandang berkurang, angin kencang, dan banjir lokal.
+ Masyarakat dihimbau untuk tetap waspada, mengurangi aktivitas di luar ruangan, serta mengambil langkah-langkah pencegahan yang diperlukan guna menjaga keselamatan.
+ Kondisi diperkirakan dapat berlangsung hingga 03 November 2026, 03:00 WIB.</description>
+            <author>cuaca.ekstrem@bmkg.go.id (BMKG)</author>
+            <category>Met</category>
+            <guid isPermaLink="false">2.49.0.1.360.0.2026.11.02.18.62.009</guid>
+            <pubDate>Mon, 02 Nov 2026 23:50:00 +0700</pubDate>
+        </item>
+        </channel>
+    </rss>

@@ -1,0 +1,41 @@
+{
+ "@odata.context": "http://www.who.int/api/news/$metadata#diseaseoutbreaknews(Id,Title,OverrideTitle,UseOverrideTitle,TitleSuffix,Summary,PublicationDate,ItemDefaultUrl,UrlName,DonId)",
+ "value": [
+  {
+   "Id": "69b96fe8-8b6d-48f4-b59b-204c444d66c5",
+   "PublicationDate": "2026-11-02T14:26:51Z",
+   "UrlName": "2026-DON623",
+   "ItemDefaultUrl": "/2026-DON623",
+   "Summary": "On 20 October 2026, the National IHR Focal Point (NFP) of France notified WHO regarding the first documented human infection with Shamonda virus (SHAV). The case was an immunocompromised older man from eastern France with no travel history during the preceding year. He developed severe neurological illness on 23 September 2026 and was diagnosed with severe encephalitis (brain inflammation). The pa",
+   "TitleSuffix": "",
+   "UseOverrideTitle": true,
+   "Title": "Shamonda virus in human - France",
+   "OverrideTitle": "Shamonda virus in human - France",
+   "DonId": "2026-DON623"
+  },
+  {
+   "Id": "f71dec3a-9f8a-4eb1-810c-baeefc888535",
+   "PublicationDate": "2026-10-23T15:48:48Z",
+   "UrlName": "2026-DON622",
+   "ItemDefaultUrl": "/2026-DON622",
+   "Summary": "Since the publication of the previous Disease Outbreak News on 8 October 2026, the Bundibugyo virus disease (BVD) outbreak has expanded geographically in the Democratic Republic of the Congo, as well as in the African Region, with Kenya and Nigeria reporting imported cases. \r\nSustained, high-level transmission continues in the Democratic Republic of the Congo. As of 20 October 2026, a total of 970",
+   "TitleSuffix": "",
+   "UseOverrideTitle": true,
+   "Title": "Ebola disease caused by Bundibugyo virus, Democratic Republic of the Congo, Kenya and Nigeria",
+   "OverrideTitle": "Ebola disease caused by Bundibugyo virus - Democratic Republic of the Congo, Kenya and Nigeria",
+   "DonId": "2026-DON622"
+  },
+  {
+   "Id": "eafb07ec-9187-4b39-b310-94b99a89571a",
+   "PublicationDate": "2026-10-15T16:22:00Z",
+   "UrlName": "middle-east-respiratory-syndrome-coronavirus---kingdom-of-saudi-arabia",
+   "ItemDefaultUrl": "/middle-east-respiratory-syndrome-coronavirus---kingdom-of-saudi-arabia",
+   "Summary": "Between 1 January and 5 October 2026, the Kingdom of Saudi Arabia reported eight laboratory-confirmed cases of Middle East Respiratory Syndrome Coronavirus (MERS-CoV) infection, including one death. Cases were detected across six locations: Al Jouf (1), Arar (1), Hafr Al-Batin (1), Riyadh (2), Tabuk (1) and Taif (2). No epidemiological links were identified between any of the cases.\r\nAll eight cas",
+   "TitleSuffix": "",
+   "UseOverrideTitle": true,
+   "Title": "Middle East respiratory syndrome coronavirus - Kingdom of Saudi Arabia",
+   "OverrideTitle": "Middle East respiratory syndrome coronavirus - Kingdom of Saudi Arabia",
+   "DonId": "2026-DON618"
+  }
+ ]
+}

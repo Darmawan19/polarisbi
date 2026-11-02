@@ -1,0 +1,115 @@
+province,product,active_policies,is_demo
+Aceh,Produk Demo A,1332,true
+Aceh,Produk Demo B,1154,true
+Aceh,Produk Demo C,674,true
+Sumatera Utara,Produk Demo A,1935,true
+Sumatera Utara,Produk Demo B,1423,true
+Sumatera Utara,Produk Demo C,1986,true
+Sumatera Barat,Produk Demo A,5641,true
+Sumatera Barat,Produk Demo B,1101,true
+Sumatera Barat,Produk Demo C,366,true
+Riau,Produk Demo A,4931,true
+Riau,Produk Demo B,1742,true
+Riau,Produk Demo C,1728,true
+Kepulauan Riau,Produk Demo A,6659,true
+Kepulauan Riau,Produk Demo B,4015,true
+Kepulauan Riau,Produk Demo C,2225,true
+Jambi,Produk Demo A,4764,true
+Jambi,Produk Demo B,999,true
+Jambi,Produk Demo C,721,true
+Sumatera Selatan,Produk Demo A,4309,true
+Sumatera Selatan,Produk Demo B,4438,true
+Sumatera Selatan,Produk Demo C,752,true
+Kepulauan Bangka Belitung,Produk Demo A,3262,true
+Kepulauan Bangka Belitung,Produk Demo B,3816,true
+Kepulauan Bangka Belitung,Produk Demo C,1646,true
+Bengkulu,Produk Demo A,2067,true
+Bengkulu,Produk Demo B,2054,true
+Bengkulu,Produk Demo C,1129,true
+Lampung,Produk Demo A,4326,true
+Lampung,Produk Demo B,4339,true
+Lampung,Produk Demo C,1184,true
+DKI Jakarta,Produk Demo A,16430,true
+DKI Jakarta,Produk Demo B,8033,true
+DKI Jakarta,Produk Demo C,4541,true
+Jawa Barat,Produk Demo A,17656,true
+Jawa Barat,Produk Demo B,7099,true
+Jawa Barat,Produk Demo C,3320,true
+Banten,Produk Demo A,10210,true
+Banten,Produk Demo B,9166,true
+Banten,Produk Demo C,4399,true
+Jawa Tengah,Produk Demo A,17565,true
+Jawa Tengah,Produk Demo B,10990,true
+Jawa Tengah,Produk Demo C,4449,true
+DI Yogyakarta,Produk Demo A,10856,true
+DI Yogyakarta,Produk Demo B,10090,true
+DI Yogyakarta,Produk Demo C,5240,true
+Jawa Timur,Produk Demo A,9659,true
+Jawa Timur,Produk Demo B,6754,true
+Jawa Timur,Produk Demo C,5930,true
+Bali,Produk Demo A,1659,true
+Bali,Produk Demo B,1431,true
+Bali,Produk Demo C,1895,true
+Nusa Tenggara Barat,Produk Demo A,2920,true
+Nusa Tenggara Barat,Produk Demo B,1786,true
+Nusa Tenggara Barat,Produk Demo C,342,true
+Nusa Tenggara Timur,Produk Demo A,5329,true
+Nusa Tenggara Timur,Produk Demo B,968,true
+Nusa Tenggara Timur,Produk Demo C,1182,true
+Kalimantan Barat,Produk Demo A,2324,true
+Kalimantan Barat,Produk Demo B,2706,true
+Kalimantan Barat,Produk Demo C,2377,true
+Kalimantan Tengah,Produk Demo A,2492,true
+Kalimantan Tengah,Produk Demo B,4391,true
+Kalimantan Tengah,Produk Demo C,1582,true
+Kalimantan Selatan,Produk Demo A,743,true
+Kalimantan Selatan,Produk Demo B,3840,true
+Kalimantan Selatan,Produk Demo C,1908,true
+Kalimantan Timur,Produk Demo A,4649,true
+Kalimantan Timur,Produk Demo B,1273,true
+Kalimantan Timur,Produk Demo C,2310,true
+Kalimantan Utara,Produk Demo A,924,true
+Kalimantan Utara,Produk Demo B,1105,true
+Kalimantan Utara,Produk Demo C,1657,true
+Sulawesi Utara,Produk Demo A,1483,true
+Sulawesi Utara,Produk Demo B,4139,true
+Sulawesi Utara,Produk Demo C,1369,true
+Gorontalo,Produk Demo A,1493,true
+Gorontalo,Produk Demo B,4059,true
+Gorontalo,Produk Demo C,1713,true
+Sulawesi Tengah,Produk Demo A,1451,true
+Sulawesi Tengah,Produk Demo B,3606,true
+Sulawesi Tengah,Produk Demo C,1213,true
+Sulawesi Barat,Produk Demo A,5902,true
+Sulawesi Barat,Produk Demo B,1058,true
+Sulawesi Barat,Produk Demo C,716,true
+Sulawesi Selatan,Produk Demo A,5954,true
+Sulawesi Selatan,Produk Demo B,2146,true
+Sulawesi Selatan,Produk Demo C,374,true
+Sulawesi Tenggara,Produk Demo A,1066,true
+Sulawesi Tenggara,Produk Demo B,1538,true
+Sulawesi Tenggara,Produk Demo C,716,true
+Maluku,Produk Demo A,4802,true
+Maluku,Produk Demo B,2661,true
+Maluku,Produk Demo C,360,true
+Maluku Utara,Produk Demo A,3510,true
+Maluku Utara,Produk Demo B,1721,true
+Maluku Utara,Produk Demo C,1902,true
+Papua,Produk Demo A,2437,true
+Papua,Produk Demo B,3751,true
+Papua,Produk Demo C,2238,true
+Papua Barat,Produk Demo A,6623,true
+Papua Barat,Produk Demo B,2105,true
+Papua Barat,Produk Demo C,1833,true
+Papua Barat Daya,Produk Demo A,4262,true
+Papua Barat Daya,Produk Demo B,4191,true
+Papua Barat Daya,Produk Demo C,1626,true
+Papua Selatan,Produk Demo A,5345,true
+Papua Selatan,Produk Demo B,2264,true
+Papua Selatan,Produk Demo C,1399,true
+Papua Tengah,Produk Demo A,2612,true
+Papua Tengah,Produk Demo B,2941,true
+Papua Tengah,Produk Demo C,410,true
+Papua Pegunungan,Produk Demo A,6113,true
+Papua Pegunungan,Produk Demo B,3844,true
+Papua Pegunungan,Produk Demo C,1748,true

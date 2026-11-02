@@ -1,0 +1,54 @@
+{
+ "Infogempa": {
+  "gempa": [
+   {
+    "Tanggal": "02 Nov 2026",
+    "Jam": "16:58:58 WIB",
+    "DateTime": "2026-11-02T09:58:58+00:00",
+    "Coordinates": "-2.49,140.66",
+    "Lintang": "2.49 LS",
+    "Bujur": "140.66 BT",
+    "Magnitude": "2.6",
+    "Kedalaman": "8 km",
+    "Wilayah": "Pusat gempa berada di darat 9 km Utara Kota Jayapura",
+    "Dirasakan": "III Jayapura"
+   },
+   {
+    "Tanggal": "02 Nov 2026",
+    "Jam": "15:13:10 WIB",
+    "DateTime": "2026-11-02T08:13:10+00:00",
+    "Coordinates": "1.31,124.83",
+    "Lintang": "1.31 LU",
+    "Bujur": "124.83 BT",
+    "Magnitude": "5.3",
+    "Kedalaman": "148 km",
+    "Wilayah": "Pusat gempa berada di darat 1 km Barat Daya Tomohon",
+    "Dirasakan": "II - III Ternate, II Minahasa"
+   },
+   {
+    "Tanggal": "02 Nov 2026",
+    "Jam": "07:53:11 WIB",
+    "DateTime": "2026-11-02T00:53:11+00:00",
+    "Coordinates": "-7.08,130.07",
+    "Lintang": "7.08 LS",
+    "Bujur": "130.07 BT",
+    "Magnitude": "5.5",
+    "Kedalaman": "130 km",
+    "Wilayah": "Pusat gempa berada di laut 169 km BaratLaut Tanimbar",
+    "Dirasakan": "II Saumlaki"
+   },
+   {
+    "Tanggal": "01 Nov 2026",
+    "Jam": "12:38:59 WIB",
+    "DateTime": "2026-11-01T05:38:59+00:00",
+    "Coordinates": "4.79,96.20",
+    "Lintang": "4.79 LU",
+    "Bujur": "96.20 BT",
+    "Magnitude": "4.1",
+    "Kedalaman": "6 km",
+    "Wilayah": "Pusat gempa berada di darat 24 km Barat Daya Kab. Pidie Jaya-Aceh",
+    "Dirasakan": ""
+   }
+  ]
+ }
+}
