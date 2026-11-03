@@ -23,6 +23,15 @@ def _chat_sync(system: str, user: str, max_tokens: int) -> str:
     return root_llm.chat([{"role": "user", "content": user}], system=system, max_tokens=max_tokens)
 
 
+def available() -> bool:
+    """True bila kunci API tersedia (llm.py root memuat .env saat diimpor). Tidak memanggil jaringan."""
+    try:
+        importlib.import_module("llm")
+    except Exception:
+        return False
+    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+
 async def complete(system: str, user: str, *, max_tokens: int = MAX_TOKENS,
                    timeout: float = LLM_TIMEOUT_SECONDS) -> str:
     """Panggil LLM tanpa memblokir event loop. Lempar exception bila gagal/timeout."""

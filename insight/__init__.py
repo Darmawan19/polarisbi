@@ -11,20 +11,26 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from . import auto_digest
 from . import db as dbm
+from . import pipeline
 from .config import get_settings
 from .router import router
 from .scheduler import InsightScheduler
 
 
 def setup_insight(app: FastAPI) -> None:
-    """Buat tabel, daftarkan /api/insight/*, dan pasang scheduler (bila INSIGHT_SCHEDULER=on).
+    """Buat tabel, daftarkan /api/insight/*, pasang pemicu auto-digest pasca-refresh, dan scheduler
+    (bawaan hidup; matikan dengan INSIGHT_SCHEDULER=off).
+
+    Pemicu auto-digest selalu terdaftar; saklarnya (INSIGHT_AUTO_DIGEST) dibaca saat pemicu berjalan.
 
     Scheduler dipasang dengan membungkus lifespan router yang sudah ada (kompatibel dengan FastAPI/Starlette
     terpasang, tanpa on_event yang sudah deprecated, dan tanpa mengganggu setup_auth).
     """
     dbm.init_schema(get_settings().db_path)
     app.include_router(router)
+    pipeline.register_after_refresh(auto_digest.after_refresh)
 
     previous = app.router.lifespan_context
     scheduler = InsightScheduler()
