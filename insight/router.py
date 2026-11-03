@@ -101,11 +101,20 @@ async def generate_digest(request: Request, body: GenerateRequest = Body(default
 @router.post("/refresh", response_model=RefreshResponse)
 async def refresh(request: Request, user: dict = Depends(require_role("admin"))):
     try:
-        result = await pipeline.refresh()
+        # sumber lambat (GDELT, Kemenkes) dilanjutkan di latar belakang agar respons < 60 detik
+        result = await pipeline.refresh(defer_slow=True)
     except pipeline.AlreadyRunning:
         _audit(request, user, "insight_refresh", "result=already_running")
         raise InsightError(409, "already_running", "Refresh sedang berjalan.") from None
-    summary = ",".join(f"{r['source']}:{'ok' if r['ok'] else 'error'}:{r['new_items']}" for r in result["results"])
+
+    def _state(r: dict) -> str:
+        if r.get("background"):
+            return "background"
+        if not r["ok"]:
+            return "error"
+        return "degraded" if r.get("degraded") else "ok"
+
+    summary = ",".join(f"{r['source']}:{_state(r)}:{r['new_items']}" for r in result["results"])
     _audit(request, user, "insight_refresh", f"result={summary}"[:500])
     return result
 
@@ -118,6 +127,7 @@ def sources():
     catalog += [(f.key, f.label, f"Sumber: {f.label}") for f in s.rss_feeds]
     with dbm.session(s.db_path) as conn:
         status_rows = {r["source"]: r for r in conn.execute("SELECT * FROM insight_source_status")}
+        health = {r["source"]: r for r in conn.execute("SELECT * FROM insight_source_health")}
     stale_after = timedelta(minutes=3 * s.refresh_minutes)
     now = dbm.utcnow()
     out = []
@@ -136,7 +146,9 @@ def sources():
             status = "ok"
         out.append({"source": key, "label": label, "attribution": attribution, "enabled": key in enabled,
                     "status": status, "last_attempt_at": last_attempt, "last_success_at": last_success,
-                    "last_item_count": r["last_item_count"] if r else None, "last_error": last_error})
+                    "last_item_count": r["last_item_count"] if r else None, "last_error": last_error,
+                    "degraded": bool(health[key]["degraded"]) if key in health else False,
+                    "degraded_reason": health[key]["degraded_reason"] if key in health else None})
     return out
 
 

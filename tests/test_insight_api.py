@@ -21,7 +21,8 @@ PW = "Sangat-Kuat-2026"
 FEED_KEYS = {"id", "source", "source_label", "attribution", "title", "snippet", "url", "published_at", "fetched_at",
              "category", "province", "score", "severity_label", "severity_verified"}
 DIGEST_KEYS = {"status", "period", "language", "bucket_key", "period_start", "period_end", "generated_at",
-               "generated_by", "is_stale", "content", "impact", "exposure_is_demo", "items", "attributions"}
+               "generated_by", "is_stale", "content", "impact", "exposure_is_demo", "items", "attributions",
+               "generated_trigger"}   # generated_trigger: tambahan Ronde 2
 
 
 @pytest.fixture
@@ -145,8 +146,11 @@ def test_generate_flow_shape_cooldown_and_audit(app_client, monkeypatch):
     assert d["status"] == "fallback" and d["generated_by"] == "template" and d["language"] == "id"
     assert d["exposure_is_demo"] is True and d["bucket_key"] == "2026-11-03"
     assert all(t.endswith("Z") for t in (d["period_start"], d["period_end"], d["generated_at"]))
-    assert set(d["content"]) == {"executive_summary", "key_events", "impact_note", "watchlist"}
-    assert all(set(e) == {"text", "item_ids"} for e in d["content"]["key_events"])
+    # aspects (konten) & category (key_events): tambahan Ronde 2
+    assert set(d["content"]) == {"executive_summary", "key_events", "impact_note", "watchlist", "aspects"}
+    assert all(set(e) == {"text", "item_ids", "category"} for e in d["content"]["key_events"])
+    assert all(set(a) == {"category", "items", "max_score"} for a in d["content"]["aspects"])
+    assert d["generated_trigger"] == "manual"
     assert all(set(i) == FEED_KEYS for i in d["items"])
     imp = d["impact"][0]
     assert set(imp) == {"province", "events", "max_score", "total_active_policies", "exposure"}
@@ -181,7 +185,8 @@ def test_refresh_admin_shape_and_audit(app_client, monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert set(body) == {"results", "finished_at"}
-    assert set(body["results"][0]) == {"source", "ok", "new_items", "error"}
+    # background & degraded: tambahan Ronde 2
+    assert set(body["results"][0]) == {"source", "ok", "new_items", "error", "background", "degraded"}
     ev = [e for e in service.audit_entries(50) if e["event"] == "insight_refresh"]
     assert ev and ev[0]["username"] == "admin1" and "gdelt:error" in ev[0]["detail"]
 
@@ -225,9 +230,12 @@ def test_sources_shape_and_status(app_client, monkeypatch):
     login(app_client, "viewer1")
     rows = app_client.get("/api/insight/sources", headers=H).json()
     by = {r["source"]: r for r in rows}
-    assert set(by) == {"bmkg_quake", "bmkg_weather", "who_don", "gdelt", "rss.kantor-berita"}
+    assert set(by) == {"bmkg_quake", "bmkg_weather", "who_don", "gdelt", "usgs_quake", "kemkes_rilis",
+                       "worldbank_id", "rss.kantor-berita"}
     assert all(set(r) == {"source", "label", "attribution", "enabled", "status", "last_attempt_at",
-                          "last_success_at", "last_item_count", "last_error"} for r in rows)
+                          "last_success_at", "last_item_count", "last_error", "degraded", "degraded_reason"}
+               for r in rows)
+    assert all(r["degraded"] is False and r["degraded_reason"] is None for r in rows)
     assert by["bmkg_quake"]["status"] == "ok" and by["bmkg_quake"]["last_item_count"] == 8
     assert by["who_don"]["status"] == "error"
     assert by["gdelt"]["status"] == "disabled" and by["gdelt"]["enabled"] is False
@@ -260,7 +268,9 @@ def test_unknown_exposure_provider_falls_back_to_demo(app_client, monkeypatch):
     assert app_client.get("/api/insight/exposure", headers=H).json()["is_demo"] is True
 
 
-def test_scheduler_off_by_default_and_lifespan_ok(insight_env, monkeypatch, tmp_path):
+def test_scheduler_off_when_forced_and_lifespan_ok(insight_env, monkeypatch, tmp_path):
+    # Ronde 2: bawaan produksi = on; tes memaksa INSIGHT_SCHEDULER=off.
+    monkeypatch.setenv("INSIGHT_SCHEDULER", "off")
     monkeypatch.setenv("POLARIS_AUTH_DB", str(tmp_path / "auth2.db"))
     app = FastAPI()
     setup_auth(app)
@@ -272,6 +282,7 @@ def test_scheduler_off_by_default_and_lifespan_ok(insight_env, monkeypatch, tmp_
 def test_scheduler_starts_and_stops_cleanly(insight_env, monkeypatch, tmp_path):
     monkeypatch.setenv("POLARIS_AUTH_DB", str(tmp_path / "auth3.db"))
     monkeypatch.setenv("INSIGHT_SCHEDULER", "on")
+    monkeypatch.setenv("INSIGHT_SCHEDULER_STARTUP_DELAY", "0")   # Ronde 2: bawaan menunggu 10 detik
     calls = []
 
     async def fake_refresh(*a, **k):

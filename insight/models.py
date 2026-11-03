@@ -9,7 +9,8 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 PERIODS = ("daily", "weekly", "monthly")
-CATEGORIES = ("bencana_alam", "kesehatan_wabah", "ekonomi_makro", "regulasi", "industri_asuransi", "lainnya")
+CATEGORIES = ("bencana_alam", "kesehatan_wabah", "ekonomi_makro", "pasar_keuangan", "regulasi", "industri_asuransi",
+              "perbankan_bri", "lainnya")
 SEVERITY_LABELS = ("rendah", "sedang", "tinggi", "sangat_tinggi")
 LANGUAGES = ("id",)
 
@@ -41,6 +42,7 @@ class RawItem:
     province: str | None = None       # adapter boleh menetapkan (mis. dari kode wilayah BMKG)
     severity_verified: bool = False
     meta: dict[str, Any] = field(default_factory=dict)
+    default_category: str | None = None   # dipakai bila kata kunci tidak cocok kategori mana pun
 
 
 # ---------- skema respons (wajib identik dengan frontend) ----------
@@ -72,6 +74,13 @@ class FeedResponse(BaseModel):
 class KeyEvent(BaseModel):
     text: str
     item_ids: list[str]
+    category: Optional[str] = None        # tambahan Ronde 2: kategori item pertama
+
+
+class AspectSummary(BaseModel):
+    category: str
+    items: int
+    max_score: int
 
 
 class DigestContent(BaseModel):
@@ -79,6 +88,7 @@ class DigestContent(BaseModel):
     key_events: list[KeyEvent]
     impact_note: str
     watchlist: list[str]
+    aspects: Optional[list[AspectSummary]] = None   # tambahan Ronde 2: aspek yang terwakili di brief
 
 
 class ExposureEntry(BaseModel):
@@ -109,6 +119,8 @@ class DigestResponse(BaseModel):
     exposure_is_demo: bool
     items: list[FeedItem]
     attributions: list[str]
+    # tambahan Ronde 2: siapa yang memicu pembuatan brief ("auto" setelah refresh, "manual" lewat endpoint)
+    generated_trigger: Optional[Literal["auto", "manual"]] = None
 
 
 class GenerateRequest(BaseModel):
@@ -123,6 +135,8 @@ class RefreshResult(BaseModel):
     ok: bool
     new_items: int
     error: Optional[str]
+    background: bool = False     # tambahan: sumber lambat yang dilanjutkan di latar belakang
+    degraded: bool = False       # tambahan: sumber membatasi laju (mis. GDELT 429), bukan error
 
 
 class RefreshResponse(BaseModel):
@@ -140,6 +154,8 @@ class SourceStatus(BaseModel):
     last_success_at: Optional[str]
     last_item_count: Optional[int]
     last_error: Optional[str]
+    degraded: bool = False                  # tambahan: siklus terakhir dibatasi laju oleh sumber
+    degraded_reason: Optional[str] = None
 
 
 class ExposureRow(BaseModel):

@@ -1,12 +1,23 @@
-"""Pipeline refresh: fetch paralel → bersihkan → klasifikasi & skor → simpan → dedupe → retensi."""
+"""Pipeline refresh: fetch paralel → bersihkan → klasifikasi & skor → simpan → dedupe → retensi.
+
+Ronde 2:
+- Setiap sumber punya timeout sendiri (atribut adapter `timeout_seconds`, bawaan DEFAULT_SOURCE_TIMEOUT).
+- `defer_slow=True` (dipakai POST refresh & scheduler): sumber ber-atribut `slow=True` (GDELT, Kemenkes)
+  dijalankan di latar belakang setelah sumber cepat selesai; respons segera kembali dengan background=true.
+  Sumber lambat memakai lock sendiri sehingga tidak pernah berjalan ganda.
+- Pemicu pasca-refresh (register_after_refresh): dipanggil di akhir SETIAP siklus (setelah sumber lambat
+  selesai bila ada), di latar belakang, terisolasi: error dicatat dan tidak pernah menggagalkan refresh.
+"""
 from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 import logging
 import threading
 from datetime import datetime, timedelta
+from typing import Any, Awaitable, Callable, Union
 
 import httpx
 
@@ -21,7 +32,10 @@ from .sources import SourceAdapter, build_adapters
 log = logging.getLogger("insight")
 
 REFRESH_DEADLINE_SECONDS = 60.0
+SLOW_DEADLINE_SECONDS = 180.0
+DEFAULT_SOURCE_TIMEOUT = 30.0
 _refresh_lock = threading.Lock()   # lintas event loop/thread; dipakai non-blocking
+_slow_lock = threading.Lock()      # sumber lambat di latar belakang (tidak pernah ganda)
 
 
 class AlreadyRunning(Exception):
@@ -30,6 +44,68 @@ class AlreadyRunning(Exception):
 
 def is_running() -> bool:
     return _refresh_lock.locked()
+
+
+def is_slow_running() -> bool:
+    return _slow_lock.locked()
+
+
+# ---------- pemicu pasca-refresh ----------
+
+AfterRefresh = Callable[[dict], Union[Awaitable[Any], Any]]
+_after_refresh: list[AfterRefresh] = []
+_background: set[asyncio.Task] = set()
+
+
+def register_after_refresh(callback: AfterRefresh) -> None:
+    """Daftarkan callback(result) yang dipanggil setelah tiap siklus refresh. Idempoten."""
+    if callback not in _after_refresh:
+        _after_refresh.append(callback)
+
+
+def unregister_after_refresh(callback: AfterRefresh) -> None:
+    if callback in _after_refresh:
+        _after_refresh.remove(callback)
+
+
+def after_refresh_callbacks() -> tuple[AfterRefresh, ...]:
+    return tuple(_after_refresh)
+
+
+async def run_after_refresh(result: dict) -> list[str]:
+    """Jalankan semua callback berurutan; setiap error ditangkap & dicatat. Mengembalikan daftar error."""
+    errors: list[str] = []
+    for cb in list(_after_refresh):
+        name = getattr(cb, "__qualname__", repr(cb))
+        try:
+            out = cb(result)
+            if inspect.isawaitable(out):
+                await out
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            errors.append(f"{name}: {type(e).__name__}")
+            log.warning("insight: pemicu pasca-refresh %s gagal (%s)", name, type(e).__name__)
+    return errors
+
+
+def _spawn(coro) -> asyncio.Task:
+    task = asyncio.ensure_future(coro)
+    _background.add(task)
+    task.add_done_callback(_background.discard)
+    return task
+
+
+async def wait_background(timeout: float | None = None) -> None:
+    """Tunggu tugas latar belakang (sumber lambat & pemicu) di event loop ini. Untuk tes dan shutdown."""
+    loop = asyncio.get_running_loop()
+    while True:
+        pending = [t for t in _background if not t.done() and t.get_loop() is loop]
+        if not pending:
+            return
+        await asyncio.wait(pending, timeout=timeout)
+        if timeout is not None:
+            return
 
 
 def make_client(settings: InsightSettings) -> httpx.AsyncClient:
@@ -55,6 +131,7 @@ def prepare(raw: RawItem, fetched_at: datetime) -> dict | None:
     snippet = clean_text(raw.snippet, SNIPPET_MAX)
     category, province, score = classify_and_score(
         raw.source, title, snippet, raw.meta, preset_category=raw.category, preset_province=raw.province,
+        default_category=raw.default_category,
     )
     meta = {k: v for k, v in (raw.meta or {}).items() if isinstance(v, (str, int, float, bool, type(None)))}
     if looks_like_injection(f"{title}\n{snippet}"):
@@ -157,12 +234,33 @@ def _safe_error(e: BaseException) -> str:
     return f"kesalahan internal: {type(e).__name__}"
 
 
+def _record_health(conn, source: str, reason: str | None, at: str) -> None:
+    conn.execute(
+        "INSERT INTO insight_source_health(source,degraded,degraded_reason,updated_at) VALUES (?,?,?,?)"
+        " ON CONFLICT(source) DO UPDATE SET degraded=excluded.degraded, degraded_reason=excluded.degraded_reason,"
+        " updated_at=excluded.updated_at",
+        (source, 1 if reason else 0, (reason or None) and reason[:300], at),
+    )
+
+
+def source_timeout(adapter: SourceAdapter) -> float:
+    t = getattr(adapter, "timeout_seconds", None)
+    return float(t) if isinstance(t, (int, float)) and t > 0 else DEFAULT_SOURCE_TIMEOUT
+
+
+async def _fetch_with_timeout(adapter: SourceAdapter, client: httpx.AsyncClient) -> list[RawItem]:
+    try:
+        return await asyncio.wait_for(adapter.fetch(client), source_timeout(adapter))
+    except (asyncio.TimeoutError, TimeoutError):
+        raise SourceError(f"melewati batas waktu sumber {int(source_timeout(adapter))} detik") from None
+
+
 async def _run_refresh(settings: InsightSettings, adapters: list[SourceAdapter], deadline: float) -> list[dict]:
     started = dbm.utcnow()
     attempt_iso = dbm.to_iso(started)
     results: dict[str, dict] = {}
     async with make_client(settings) as client:
-        tasks = {asyncio.ensure_future(a.fetch(client)): a for a in adapters}
+        tasks = {asyncio.ensure_future(_fetch_with_timeout(a, client)): a for a in adapters}
         done, pending = await asyncio.wait(tasks, timeout=deadline) if tasks else (set(), set())
         for t in pending:
             t.cancel()
@@ -192,22 +290,62 @@ async def _run_refresh(settings: InsightSettings, adapters: list[SourceAdapter],
                 if r["id"] not in by_id or r["score"] > by_id[r["id"]]["score"]:
                     by_id[r["id"]] = r
             new = store_items(conn, list(by_id.values()))
-            results[adapter.name] = {"source": adapter.name, "ok": True, "new_items": new, "error": None}
+            degraded = getattr(adapter, "degraded_reason", None)
+            degraded = degraded if isinstance(degraded, str) and degraded else None
+            results[adapter.name] = {"source": adapter.name, "ok": True, "new_items": new, "error": None,
+                                     "degraded": bool(degraded)}
             _record_status(conn, adapter.name, attempt=attempt_iso, ok=True, count=len(by_id), error=None)
+            _record_health(conn, adapter.name, degraded, attempt_iso)
         dedupe_titles(conn)
         purge_old(conn, settings, fetched_at)
     return [results[a.name] for a in adapters]
 
 
+def _finish(results: list[dict]) -> dict:
+    return {"results": results, "finished_at": dbm.to_iso(dbm.utcnow())}
+
+
+async def _slow_then_hooks(s: InsightSettings, slow: list[SourceAdapter], fast_results: list[dict]) -> None:
+    """Latar belakang: jalankan sumber lambat (dilewati bila siklus lambat sebelumnya masih berjalan), lalu
+    pemicu pasca-refresh."""
+    slow_results: list[dict] = []
+    if _slow_lock.acquire(blocking=False):
+        try:
+            slow_results = await _run_refresh(s, slow, SLOW_DEADLINE_SECONDS)
+        except Exception as e:   # sumber lambat tidak boleh menjatuhkan tugas latar belakang
+            log.warning("insight: refresh sumber lambat gagal (%s)", type(e).__name__)
+        finally:
+            _slow_lock.release()
+    else:
+        log.info("insight: sumber lambat masih berjalan dari siklus sebelumnya; dilewati")
+    await run_after_refresh(_finish(fast_results + slow_results))
+
+
 async def refresh(settings: InsightSettings | None = None, *, adapters: list[SourceAdapter] | None = None,
-                  deadline: float = REFRESH_DEADLINE_SECONDS) -> dict:
-    """Refresh semua sumber aktif. Lempar AlreadyRunning bila refresh lain sedang berjalan."""
+                  deadline: float = REFRESH_DEADLINE_SECONDS, defer_slow: bool = False) -> dict:
+    """Refresh semua sumber aktif. Lempar AlreadyRunning bila refresh lain sedang berjalan.
+
+    defer_slow=False (bawaan, perilaku lama): semua sumber ditunggu. defer_slow=True: sumber slow=True
+    dilanjutkan di latar belakang dan muncul di hasil dengan background=true, new_items=0.
+    Pemicu pasca-refresh selalu dijadwalkan di latar belakang (tidak ditunggu).
+    """
     s = settings or get_settings()
     if not _refresh_lock.acquire(blocking=False):
         raise AlreadyRunning()
     try:
         dbm.init_schema(s.db_path)
-        results = await _run_refresh(s, adapters if adapters is not None else build_adapters(s), deadline)
-        return {"results": results, "finished_at": dbm.to_iso(dbm.utcnow())}
+        all_adapters = adapters if adapters is not None else build_adapters(s)
+        slow = [a for a in all_adapters if defer_slow and getattr(a, "slow", False) is True]
+        fast = [a for a in all_adapters if a not in slow]
+        fast_results = await _run_refresh(s, fast, deadline) if fast else []
     finally:
         _refresh_lock.release()
+
+    by_name = {r["source"]: r for r in fast_results}
+    for a in slow:
+        by_name[a.name] = {"source": a.name, "ok": True, "new_items": 0, "error": None, "background": True}
+    if slow:
+        _spawn(_slow_then_hooks(s, slow, fast_results))
+    elif _after_refresh:
+        _spawn(run_after_refresh(_finish(fast_results)))
+    return _finish([by_name[a.name] for a in all_adapters])

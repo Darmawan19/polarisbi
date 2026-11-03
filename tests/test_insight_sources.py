@@ -278,7 +278,8 @@ def test_gdelt_parses_documented_format_and_empty_object():
     assert gdelt.parse_artlist(b"{}") == []          # respons nyata saat verifikasi
 
 
-def test_gdelt_queries_sequential_spaced_and_stop_on_429():
+def test_gdelt_queries_sequential_spaced_backoff_then_stop_on_second_429():
+    # Ronde 2: 429 → backoff lalu ulang sekali; 429 lagi → berhenti & degraded (bukan error).
     delays, calls = [], []
 
     async def rec_sleep(s):
@@ -286,7 +287,7 @@ def test_gdelt_queries_sequential_spaced_and_stop_on_429():
 
     def handler(req):
         calls.append(req.url.params["query"])
-        if len(calls) == 3:
+        if len(calls) in (3, 4):
             return httpx.Response(429, text="Please limit requests to one every 5 seconds")
         return httpx.Response(200, json=GDELT_DOC_SAMPLE)
 
@@ -297,17 +298,46 @@ def test_gdelt_queries_sequential_spaced_and_stop_on_429():
             return await a.fetch(c)
 
     items = run(go())
-    assert len(calls) == 3 and a.stop_reason == "429"
-    assert delays == [gdelt.QUERY_SPACING_SECONDS] * 2
+    assert len(calls) == 4 and a.stop_reason == "429" and a.degraded_reason
+    assert calls[2] == calls[3]                  # query yang sama diulang setelah backoff
+    assert delays == [gdelt.QUERY_SPACING_SECONDS] * 2 + [gdelt.BACKOFF_SECONDS]
     assert len(items) == 2                       # dedupe per URL antar-query, hasil parsial dipakai
     assert all(q.endswith("sourcecountry:indonesia") for q in calls)
 
 
-def test_gdelt_429_on_first_query_is_error():
-    a = gdelt.GdeltAdapter(sleep=no_sleep)
+def test_gdelt_429_retry_succeeds_and_continues():
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.params["query"])
+        return httpx.Response(429) if len(calls) == 1 else httpx.Response(200, json={})
+
+    a = gdelt.GdeltAdapter(sleep=no_sleep, clock=lambda: 0.0)
+
+    async def go():
+        async with client(handler) as c:
+            return await a.fetch(c)
+
+    assert run(go()) == []
+    assert len(calls) == len(gdelt.QUERIES) + 1 and a.degraded_reason is None and a.stop_reason is None
+
+
+def test_gdelt_429_on_first_query_is_degraded_not_error():
+    a = gdelt.GdeltAdapter(sleep=no_sleep, clock=lambda: 0.0)
 
     async def go():
         async with client(lambda r: httpx.Response(429)) as c:
+            return await a.fetch(c)
+
+    assert run(go()) == []
+    assert a.stop_reason == "429" and "429" in a.degraded_reason
+
+
+def test_gdelt_non_429_errors_on_all_queries_still_error():
+    a = gdelt.GdeltAdapter(sleep=no_sleep, clock=lambda: 0.0)
+
+    async def go():
+        async with client(lambda r: httpx.Response(503)) as c:
             return await a.fetch(c)
 
     with pytest.raises(SourceError):

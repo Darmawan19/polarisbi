@@ -15,7 +15,9 @@ FIX = ROOT / "tests" / "fixtures" / "insight"
 
 ENV_KEYS = ("INSIGHT_SOURCES", "INSIGHT_RSS_FEEDS", "INSIGHT_HTTP_TIMEOUT", "INSIGHT_CAP_MAX_PER_CYCLE",
             "INSIGHT_RETENTION_DAYS", "INSIGHT_SCHEDULER", "INSIGHT_REFRESH_MINUTES",
-            "INSIGHT_GENERATE_COOLDOWN_SECONDS", "INSIGHT_EXPOSURE_PROVIDER")
+            "INSIGHT_GENERATE_COOLDOWN_SECONDS", "INSIGHT_EXPOSURE_PROVIDER", "INSIGHT_AUTO_DIGEST",
+            "INSIGHT_AUTO_DAILY_MIN_MINUTES", "INSIGHT_AUTO_LONG_MIN_HOURS", "INSIGHT_AUTO_MAX_CALLS_PER_DAY",
+            "INSIGHT_SCHEDULER_STARTUP_DELAY")
 
 
 def fixture_bytes(name: str) -> bytes:
@@ -47,6 +49,9 @@ def insight_env(tmp_path, monkeypatch):
     monkeypatch.setenv("INSIGHT_DB_PATH", str(tmp_path / "insight.db"))
     for k in ENV_KEYS:
         monkeypatch.delenv(k, raising=False)
+    # Tes TIDAK PERNAH menjalankan scheduler (bawaan produksi = on) dan auto-digest hanya dinyalakan eksplisit.
+    monkeypatch.setenv("INSIGHT_SCHEDULER", "off")
+    monkeypatch.setenv("INSIGHT_AUTO_DIGEST", "off")
     from insight import db as dbm
     from insight import llm as insight_llm
 

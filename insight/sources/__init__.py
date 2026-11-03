@@ -6,14 +6,19 @@ from .base import SourceAdapter
 from .bmkg_quake import BmkgQuakeAdapter
 from .bmkg_weather import BmkgWeatherAdapter
 from .gdelt import GdeltAdapter
-from .rss import RssAdapter
+from .rss import KemkesRilisAdapter, RssAdapter
+from .usgs import UsgsQuakeAdapter
 from .who_don import WhoDonAdapter
+from .worldbank import WorldBankAdapter
 
 BUILTIN = {
     "bmkg_quake": BmkgQuakeAdapter,
     "bmkg_weather": BmkgWeatherAdapter,
     "who_don": WhoDonAdapter,
     "gdelt": GdeltAdapter,
+    "usgs_quake": UsgsQuakeAdapter,
+    "kemkes_rilis": KemkesRilisAdapter,
+    "worldbank_id": WorldBankAdapter,
 }
 
 # Label & atribusi statis (dipakai /sources juga untuk sumber yang nonaktif).

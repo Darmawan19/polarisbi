@@ -69,7 +69,32 @@ CREATE TABLE IF NOT EXISTS insight_digests (
     exposure_is_demo  INTEGER NOT NULL,
     UNIQUE (period, bucket_key, language)
 );
+
+-- Ronde 2: penanda "degraded" per sumber (tabel terpisah agar insight_source_status tidak berubah).
+CREATE TABLE IF NOT EXISTS insight_source_health (
+    source          TEXT PRIMARY KEY,
+    degraded        INTEGER NOT NULL DEFAULT 0,
+    degraded_reason TEXT,
+    updated_at      TEXT NOT NULL
+);
+
+-- Ronde 2: jejak ringkasan otomatis (dasar batas panggilan LLM per hari).
+CREATE TABLE IF NOT EXISTS insight_auto_digest_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    at          TEXT NOT NULL,
+    period      TEXT NOT NULL,
+    bucket_key  TEXT NOT NULL,
+    action      TEXT NOT NULL,
+    llm_called  INTEGER NOT NULL DEFAULT 0,
+    result      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_insight_auto_digest_log_at ON insight_auto_digest_log(at);
 """
+
+# Kolom tambahan pada tabel lama (ALTER TABLE ADD COLUMN, idempoten). Baris lama: NULL.
+ADDED_COLUMNS = (
+    ("insight_digests", "generated_trigger", "TEXT"),   # "auto" | "manual"; NULL = dibuat sebelum Ronde 2
+)
 
 
 def utcnow() -> datetime:
@@ -114,6 +139,14 @@ def init_schema(path: Path) -> None:
     conn = connect(path)
     try:
         conn.executescript(SCHEMA)
+        for table, column, decl in ADDED_COLUMNS:
+            cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+            if column not in cols:
+                try:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+                except sqlite3.OperationalError as e:   # proses lain menambahkannya bersamaan
+                    if "duplicate column" not in str(e).lower():
+                        raise
     finally:
         conn.close()
 

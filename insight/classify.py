@@ -71,18 +71,34 @@ def has_keyword(text: str, words: tuple[str, ...]) -> bool:
     return keyword_hits(text, words) > 0
 
 
+def weighted_hits(text: str, weights: dict[str, int]) -> int:
+    """Total bobot semua kemunculan kata kunci (frasa terpanjang didahulukan, tidak tumpang tindih)."""
+    if not text or not weights:
+        return 0
+    lower = {k.lower(): v for k, v in weights.items()}
+    return sum(lower.get(m.lower(), 0) for m in _kw_pattern(tuple(weights)).findall(text))
+
+
 def matched_categories(text: str) -> dict[str, int]:
-    return {cat: n for cat, words in R.CATEGORY_KEYWORDS.items() if (n := keyword_hits(text, words))}
+    """{kategori: total bobot} untuk kategori yang punya minimal satu kecocokan."""
+    return {cat: n for cat, words in R.CATEGORY_KEYWORDS.items() if (n := weighted_hits(text, words))}
 
 
-def classify_category(source: str, text: str) -> str:
+def classify_category(source: str, text: str, default_category: str | None = None) -> str:
+    """Kategori tetap per sumber → bobot kata kunci tertinggi (seri: CATEGORY_PRIORITY) → kategori bawaan
+    sumber/feed → "lainnya"."""
     base = source.split(".", 1)[0]
     if base in R.SOURCE_FIXED_CATEGORY:
         return R.SOURCE_FIXED_CATEGORY[base]
+    default = default_category or R.SOURCE_DEFAULT_CATEGORY.get(base)
     hits = matched_categories(text)
-    if not hits:
-        return "lainnya"
+    if not hits or (default and max(hits.values()) < R.DEFAULT_OVERRIDE_MIN_WEIGHT):
+        return default or "lainnya"
     return max(hits, key=lambda c: (hits[c], -R.CATEGORY_PRIORITY.index(c)))
+
+
+def matched_event_rules(text: str) -> list[R.NewsEventRule]:
+    return [rule for rule in R.NEWS_EVENT_RULES if all(has_keyword(text, g) for g in rule.groups)]
 
 
 # ---------- skor per jenis sumber ----------
@@ -126,6 +142,9 @@ def score_news(text: str, province: str | None) -> int:
     hits = matched_categories(text)
     if hits:  # satu bonus tertinggi, bukan dijumlah
         score += max(R.NEWS_CATEGORY_BONUS.get(c, 0) for c in hits)
+    rules = matched_event_rules(text)
+    if rules:  # satu bonus aturan kejadian tertinggi, bukan dijumlah
+        score += max(r.bonus for r in rules)
     if province:
         score += R.NEWS_PROVINCE_BONUS
     return R.clamp_score(score)
@@ -137,13 +156,14 @@ def looks_like_injection(text: str) -> bool:
 
 def classify_and_score(source: str, title: str, snippet: str, meta: dict,
                        preset_category: str | None = None,
-                       preset_province: str | None = None) -> tuple[str, str | None, int]:
+                       preset_province: str | None = None,
+                       default_category: str | None = None) -> tuple[str, str | None, int]:
     """Kembalikan (category, province, score)."""
     text = f"{title}\n{snippet}"
     base = source.split(".", 1)[0]
-    category = preset_category or classify_category(source, text)
+    category = preset_category or classify_category(source, text, default_category)
     province = preset_province or detect_province(text)
-    if base == "bmkg_quake":
+    if base in ("bmkg_quake", "usgs_quake"):
         score = score_quake(meta.get("magnitude"), meta.get("depth_km"), bool(meta.get("tsunami")))
     elif base == "bmkg_weather":
         score = score_weather(meta.get("cap_severity"), title)

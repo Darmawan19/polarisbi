@@ -65,16 +65,22 @@ def test_windows():
 # ---------- pemilihan item & impact ----------
 
 def test_select_items_threshold_limit_and_order(insight_env, clock):
-    rows = [dict(id=f"i{n:02d}", score=30 + n, published_at="2026-11-03T01:00:00Z") for n in range(30)]
+    # Ronde 2: 30 item tersebar di 7 kategori; batas total 28 (sebelumnya 25) dan kuota 4 per kategori.
+    cats = ("bencana_alam", "kesehatan_wabah", "ekonomi_makro", "pasar_keuangan", "regulasi", "industri_asuransi",
+            "perbankan_bri")
+    rows = [dict(id=f"i{n:02d}", score=30 + n, category=cats[n % 7], published_at="2026-11-03T01:00:00Z")
+            for n in range(30)]
     rows += [dict(id="low", score=10, published_at="2026-11-03T01:00:00Z"),
              dict(id="old", score=99, published_at="2026-11-01T00:00:00Z")]
     seed(rows)
     s, e = D.window("daily", NOW)
     with dbm.session(get_settings().db_path) as conn:
         items = D.select_items(conn, s, e)
-    assert len(items) == 25
+    assert len(items) == 28
     assert items[0]["id"] == "i29" and all(i["score"] >= 30 for i in items)
+    assert [i["score"] for i in items] == sorted((i["score"] for i in items), reverse=True)
     assert "old" not in {i["id"] for i in items}
+    assert all(sum(1 for i in items if i["category"] == c) == 4 for c in cats)
 
 
 def test_select_items_takes_top_any_when_fewer_than_5(insight_env, clock):
@@ -181,8 +187,8 @@ def test_llm_success_validated(insight_env, clock, monkeypatch):
     r = gen("daily")
     assert r["status"] == "ready" and r["generated_by"] == "llm"
     c = r["content"]
-    assert c["key_events"] == [{"text": "Gempa M6.0 Papua Pegunungan", "item_ids": ["q1"]},
-                               {"text": "Dengue di Indonesia", "item_ids": ["d1"]}]
+    assert c["key_events"] == [{"text": "Gempa M6.0 Papua Pegunungan", "item_ids": ["q1"], "category": "bencana_alam"},
+                               {"text": "Dengue di Indonesia", "item_ids": ["d1"], "category": "kesehatan_wabah"}]
     assert c["executive_summary"].startswith("Gempa M6.0")
     assert c["watchlist"] == ["Susulan gempa", "Lonjakan DBD"]
     assert len(calls) == 1
@@ -209,7 +215,7 @@ def test_fabricated_numbers_replaced_with_template(insight_env, clock, monkeypat
     assert r["status"] == "ready"
     assert "1.250.000" not in c["executive_summary"] and c["executive_summary"].startswith("Periode 24 jam terakhir")
     assert "99" not in c["impact_note"] and c["impact_note"].startswith("Estimasi paparan")
-    assert c["key_events"] == [{"text": "Gempa besar", "item_ids": ["q1"]}]
+    assert c["key_events"] == [{"text": "Gempa besar", "item_ids": ["q1"], "category": "bencana_alam"}]
     assert c["watchlist"] == ["Pantau susulan"]
 
 
@@ -318,4 +324,4 @@ def test_prompt_injection_that_evades_heuristic_cannot_inject_numbers_or_ids(ins
     assert u.count(D.DATA_END) == 1 and u.index("PENTING") < u.index(D.DATA_END)   # penanda tidak bisa dipalsukan
     c = r["content"]
     assert "52000" not in c["executive_summary"] and "52000" not in c["impact_note"]
-    assert c["key_events"] == [{"text": "Kejadian di Bali", "item_ids": ["s1"]}]
+    assert c["key_events"] == [{"text": "Kejadian di Bali", "item_ids": ["s1"], "category": "bencana_alam"}]

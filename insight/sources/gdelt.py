@@ -1,13 +1,16 @@
 """GDELT DOC 2.0 API (https://api.gdeltproject.org/api/v2/doc/doc), mode=artlist, format=json.
 
-STATUS VERIFIKASI (2026-11-03): endpoint terjangkau, tetapi setiap query uji mengembalikan `{}` (tanpa
-artikel) atau HTTP 429 dengan teks "Please limit requests to one every 5 seconds". Format daftar artikel
-TIDAK bisa diverifikasi langsung; parser mengikuti dokumentasi resmi GDELT DOC 2.0:
+STATUS VERIFIKASI (2026-11-03, diulang di Ronde 2): endpoint terjangkau, tetapi setiap query uji mengembalikan
+`{}` (tanpa artikel) atau HTTP 429 dengan teks "Please limit requests to one every 5 seconds". Format daftar
+artikel TIDAK bisa diverifikasi langsung; parser mengikuti dokumentasi resmi GDELT DOC 2.0:
 {"articles": [{"url", "url_mobile", "title", "seendate": "YYYYMMDDTHHMMSSZ", "socialimage", "domain",
 "language", "sourcecountry"}]}. `{}` diperlakukan sebagai nol artikel (bukan error).
 
-Batas GDELT: 1 request per 5 detik → query dikirim berurutan dengan jeda 5,5 detik; berhenti saat 429
-atau saat anggaran waktu internal habis (hasil parsial tetap dipakai).
+Ronde 2:
+- Maksimal 8 query per siklus, satu per aspek (lihat QUERIES), dikirim berurutan dengan jeda 5,5 detik.
+- HTTP 429: tunggu BACKOFF_SECONDS lalu ulangi query itu sekali; bila masih 429, siklus berhenti dan sumber
+  ditandai DEGRADED (degraded_reason), BUKAN error. Hasil parsial tetap dipakai.
+- slow=True: pada POST refresh, GDELT dijalankan di latar belakang (lihat pipeline) agar respons < 60 detik.
 """
 from __future__ import annotations
 
@@ -20,17 +23,28 @@ from ..models import RawItem, SourceError
 from .base import HttpStatusError, default_sleep, get_bytes, parse_date
 
 API_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
-# Query ditentukan server (tidak pernah dari input pengguna).
+# (aspek, query). Query ditentukan server (tidak pernah dari input pengguna). Maksimal MAX_QUERIES.
 QUERIES: tuple[tuple[str, str], ...] = (
-    ("bencana_alam", '("bencana alam" OR gempa OR longsor OR erupsi OR tsunami) sourcecountry:indonesia'),
-    ("banjir", "banjir sourcecountry:indonesia"),
-    ("wabah", '(wabah OR KLB OR pandemi OR "demam berdarah") sourcecountry:indonesia'),
-    ("ekonomi", '(inflasi OR "suku bunga" OR "BI rate") sourcecountry:indonesia'),
-    ("asuransi_ojk", "(asuransi OR OJK) sourcecountry:indonesia"),
+    ("bencana_alam", '(gempa OR banjir OR longsor OR erupsi OR tsunami OR "bencana alam") sourcecountry:indonesia'),
+    ("kesehatan_wabah", '(wabah OR KLB OR pandemi OR "demam berdarah" OR outbreak) sourcecountry:indonesia'),
+    ("ekonomi_makro", '(inflasi OR "suku bunga" OR "BI rate" OR rupiah OR "neraca perdagangan") '
+                      'sourcecountry:indonesia'),
+    ("pasar_keuangan", '(IHSG OR "bursa efek" OR obligasi OR "reksa dana" OR "trading halt") sourcecountry:indonesia'),
+    ("regulasi", '(OJK OR POJK OR "Otoritas Jasa Keuangan") sourcecountry:indonesia'),
+    ("industri_asuransi", '(asuransi OR "asuransi jiwa" OR reasuransi OR AAJI) sourcecountry:indonesia'),
+    ("perbankan_bri", '("Bank Rakyat Indonesia" OR BBRI OR "BRI Life" OR "kredit usaha rakyat") '
+                      'sourcecountry:indonesia'),
+    ("perbankan_nasional", '(perbankan OR "kredit macet" OR "likuiditas bank" OR "suku bunga kredit") '
+                           'sourcecountry:indonesia'),
 )
+MAX_QUERIES = 8
 QUERY_SPACING_SECONDS = 5.5
-TIME_BUDGET_SECONDS = 40.0
+BACKOFF_SECONDS = 15.0
+TIME_BUDGET_SECONDS = 100.0
+REQUEST_TIMEOUT_SECONDS = 15.0
 MAX_RECORDS = 25
+
+assert len(QUERIES) <= MAX_QUERIES
 
 
 def parse_artlist(data: bytes) -> list[RawItem]:
@@ -64,41 +78,61 @@ class GdeltAdapter:
     name = "gdelt"
     label = "GDELT Project"
     attribution = "Sumber: GDELT Project"
+    slow = True
+    timeout_seconds = TIME_BUDGET_SECONDS + 2 * REQUEST_TIMEOUT_SECONDS
 
     def __init__(self, sleep=default_sleep, clock=time.monotonic):
         self.sleep = sleep
         self.clock = clock
         self.stop_reason: str | None = None
+        self.degraded_reason: str | None = None
+
+    async def _query(self, client: httpx.AsyncClient, q: str) -> list[RawItem]:
+        params = {"query": q, "mode": "artlist", "format": "json", "maxrecords": str(MAX_RECORDS),
+                  "timespan": "3d", "sort": "datedesc"}
+        data = await get_bytes(client, API_URL, params=params, label="GDELT", timeout=REQUEST_TIMEOUT_SECONDS)
+        return parse_artlist(data)
 
     async def fetch(self, client: httpx.AsyncClient) -> list[RawItem]:
+        self.stop_reason = None
+        self.degraded_reason = None
         start = self.clock()
         items: dict[str, RawItem] = {}
         ok_queries = 0
         last_error: str | None = None
-        for i, (tag, q) in enumerate(QUERIES):
+        for i, (tag, q) in enumerate(QUERIES[:MAX_QUERIES]):
             if i:
                 if self.clock() - start + QUERY_SPACING_SECONDS > TIME_BUDGET_SECONDS:
                     self.stop_reason = "time_budget"
                     break
                 await self.sleep(QUERY_SPACING_SECONDS)
-            params = {"query": q, "mode": "artlist", "format": "json", "maxrecords": str(MAX_RECORDS),
-                      "timespan": "3d", "sort": "datedesc"}
-            try:
-                data = await get_bytes(client, API_URL, params=params, label="GDELT")
-                parsed = parse_artlist(data)
-            except HttpStatusError as e:
-                last_error = str(e)
-                if e.status == 429:
-                    self.stop_reason = "429"
+            parsed = None
+            for attempt in (0, 1):
+                try:
+                    parsed = await self._query(client, q)
                     break
-                continue
-            except SourceError as e:
-                last_error = str(e)
+                except HttpStatusError as e:
+                    last_error = str(e)
+                    if e.status != 429:
+                        break
+                    if attempt == 0 and self.clock() - start + BACKOFF_SECONDS <= TIME_BUDGET_SECONDS:
+                        await self.sleep(BACKOFF_SECONDS)     # backoff, lalu coba sekali lagi
+                        continue
+                    self.stop_reason = "429"
+                    self.degraded_reason = ("GDELT membatasi laju (HTTP 429); siklus dihentikan setelah "
+                                            f"{ok_queries} dari {len(QUERIES)} query")
+                    break
+                except SourceError as e:
+                    last_error = str(e)
+                    break
+            if self.stop_reason == "429":
+                break
+            if parsed is None:
                 continue
             ok_queries += 1
             for it in parsed:
                 it.meta["query"] = tag
                 items.setdefault(it.url, it)
-        if ok_queries == 0 and last_error:
+        if ok_queries == 0 and last_error and self.degraded_reason is None:
             raise SourceError(last_error)
         return list(items.values())

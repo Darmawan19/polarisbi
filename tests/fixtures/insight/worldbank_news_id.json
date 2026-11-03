@@ -1,0 +1,54 @@
+{
+ "rows": 3,
+ "os": 0,
+ "page": 1,
+ "total": 970,
+ "documents": {
+  "ODI3MjAxMTAxNTIyMGM2ZWQ5MWRjZTM5MjZjNTAwZDdlOTQ5MzEzYw2": {
+   "id": "ODI3MjAxMTAxNTIyMGM2ZWQ5MWRjZTM5MjZjNTAwZDdlOTQ5MzEzYw2",
+   "url": "http://www.worldbank.org/en/news/feature/2026/06/04/social-forestry-in-indonesia-empowering-communities-creating-jobs-and-protecting-forests",
+   "count": "Indonesia",
+   "descr": {
+    "cdata!": "From job creation to empowering women's roles in society, the successful implementation of SSF demonstrates that local communities can manage forests effectively for their livelihoods and environmental preservation, provided they are equipped with knowledge, trust, and legal access."
+   },
+   "title": {
+    "cdata!": "Social Forestry in Indonesia: Empowering Communities, Creating Jobs, and Protecting Forests"
+   },
+   "cqpath": "/content/wb-home/en/news/feature/2026/06/04/social-forestry-in-indonesia-empowering-communities-creating-jobs-and-protecting-forests",
+   "lnchdt": "2026-06-04T20:14:09Z",
+   "wcmsource": "cq5",
+   "displayconttype": "Feature Story"
+  },
+  "ZDQ1MDU5ZGI5MjQ4ZTgwYjhiMzAzY2ViZDUzMDM0YzAyNWQ5YTJjNA2": {
+   "id": "ZDQ1MDU5ZGI5MjQ4ZTgwYjhiMzAzY2ViZDUzMDM0YzAyNWQ5YTJjNA2",
+   "url": "http://www.worldbank.org/en/results/2026/05/29/turning-destinations-into-opportunity-supporting-more-than-a-million-jobs-in-indonesia",
+   "count": "Indonesia",
+   "descr": {
+    "cdata!": "The Indonesia Tourism Development Project (ITDP, 2018–2024) improved tourism infrastructure, strengthened institutions, enhanced local economic participation, and attracted private investment."
+   },
+   "title": {
+    "cdata!": "Turning Destinations into Opportunity: Supporting More than a Million Jobs in Indonesia"
+   },
+   "cqpath": "/content/wb-home/en/projects-operations/results/2026/05/29/turning-destinations-into-opportunity-supporting-more-than-a-million-jobs-in-indonesia",
+   "lnchdt": "2026-05-29T10:57:40Z",
+   "wcmsource": "cq5",
+   "displayconttype": "Results"
+  },
+  "YzVmNzg1NmQ3MDk5OWFiOTU0NjdjZjVmY2NiZjhiODVhNDkyNGVhNA2": {
+   "id": "YzVmNzg1NmQ3MDk5OWFiOTU0NjdjZjVmY2NiZjhiODVhNDkyNGVhNA2",
+   "url": "http://www.worldbank.org/en/news/immersive-story/2026/04/09/jobs-for-people-jobs-for-progress",
+   "count": "Papua New Guinea,Philippines,Pacific Islands,Fiji,Vietnam,Lao PDR,Cambodia,Thailand,Indonesia,China",
+   "descr": {
+    "cdata!": "Discover how East Asia and Pacific is creating jobs and advancing towards a better future with World Bank Group support."
+   },
+   "title": {
+    "cdata!": "Jobs for People, Jobs for Progress"
+   },
+   "cqpath": "/content/wb-home/en/news/immersive-story/2026/04/09/jobs-for-people-jobs-for-progress",
+   "lnchdt": "2026-04-09T09:00:00Z",
+   "wcmsource": "cq5",
+   "displayconttype": "Immersive Story"
+  },
+  "facets": {}
+ }
+}
