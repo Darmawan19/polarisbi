@@ -87,6 +87,11 @@ def _float(name: str, default: float, minimum: float | None = None) -> float:
     return val
 
 
+def _path(name: str) -> Path | None:
+    raw = (os.environ.get(name) or "").strip()
+    return Path(raw) if raw else None
+
+
 def slugify(label: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", (label or "").lower()).strip("-")
     return s[:40] or "feed"
@@ -174,6 +179,10 @@ class InsightSettings:
     auto_long_min_hours: int = 24
     auto_max_calls_per_day: int = 30
     scheduler_startup_delay: float = 10.0
+    # --- Mesin keputusan: katalog produk (DEMO sampai ada sumber asli) ---
+    product_provider: str = "demo"
+    product_csv: Path | None = None            # None = insight/data/demo_products.csv
+    product_province_csv: Path | None = None   # None = insight/data/demo_product_province.csv
 
     @property
     def enabled_keys(self) -> tuple[str, ...]:
@@ -203,4 +212,7 @@ def get_settings() -> InsightSettings:
         auto_long_min_hours=_int("INSIGHT_AUTO_LONG_MIN_HOURS", 24, minimum=0),
         auto_max_calls_per_day=_int("INSIGHT_AUTO_MAX_CALLS_PER_DAY", 30, minimum=0),
         scheduler_startup_delay=_float("INSIGHT_SCHEDULER_STARTUP_DELAY", 10.0, minimum=0.0),
+        product_provider=(os.environ.get("INSIGHT_PRODUCT_PROVIDER") or "demo").strip().lower(),
+        product_csv=_path("INSIGHT_PRODUCT_CSV"),
+        product_province_csv=_path("INSIGHT_PRODUCT_PROVINCE_CSV"),
     )

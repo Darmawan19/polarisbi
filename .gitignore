@@ -19,3 +19,6 @@ data/
 *.db
 *.db-wal
 *.db-shm
+
+# Mesin keputusan: CSV demo produk di insight/data/ ikut di-commit (file .db di mana pun tetap diabaikan)
+!insight/data/

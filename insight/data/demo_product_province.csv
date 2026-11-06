@@ -1,0 +1,231 @@
+# DATA FIKTIF (DEMO). Sebaran polis per provinsi dibuat deterministik dari bobot populasi kasar;
+# total per produk = active_policies di demo_products.csv. Bukan data BRI Life.
+product_code,province,policies
+DEMO-CL,Aceh,9802
+DEMO-CL,Sumatera Utara,22570
+DEMO-CL,Sumatera Barat,10228
+DEMO-CL,Riau,11479
+DEMO-CL,Kepulauan Riau,4709
+DEMO-CL,Jambi,7138
+DEMO-CL,Sumatera Selatan,14277
+DEMO-CL,Kepulauan Bangka Belitung,3467
+DEMO-CL,Bengkulu,4537
+DEMO-CL,Lampung,15050
+DEMO-CL,DKI Jakarta,16693
+DEMO-CL,Jawa Barat,57583
+DEMO-CL,Banten,18783
+DEMO-CL,Jawa Tengah,45914
+DEMO-CL,DI Yogyakarta,7138
+DEMO-CL,Jawa Timur,49467
+DEMO-CL,Bali,8200
+DEMO-CL,Nusa Tenggara Barat,9945
+DEMO-CL,Nusa Tenggara Timur,9945
+DEMO-CL,Kalimantan Barat,9945
+DEMO-CL,Kalimantan Tengah,5712
+DEMO-CL,Kalimantan Selatan,7900
+DEMO-CL,Kalimantan Timur,7445
+DEMO-CL,Kalimantan Utara,1884
+DEMO-CL,Sulawesi Utara,5548
+DEMO-CL,Gorontalo,2900
+DEMO-CL,Sulawesi Tengah,6196
+DEMO-CL,Sulawesi Barat,3467
+DEMO-CL,Sulawesi Selatan,15050
+DEMO-CL,Sulawesi Tenggara,5712
+DEMO-CL,Maluku,4188
+DEMO-CL,Maluku Utara,3092
+DEMO-CL,Papua,2705
+DEMO-CL,Papua Barat,1666
+DEMO-CL,Papua Barat Daya,1666
+DEMO-CL,Papua Selatan,1439
+DEMO-CL,Papua Tengah,3280
+DEMO-CL,Papua Pegunungan,3280
+DEMO-BS,Aceh,2913
+DEMO-BS,Sumatera Utara,8263
+DEMO-BS,Sumatera Barat,3072
+DEMO-BS,Riau,3549
+DEMO-BS,Kepulauan Riau,1165
+DEMO-BS,Jambi,1960
+DEMO-BS,Sumatera Selatan,4661
+DEMO-BS,Kepulauan Bangka Belitung,795
+DEMO-BS,Bengkulu,1112
+DEMO-BS,Lampung,4979
+DEMO-BS,DKI Jakarta,11335
+DEMO-BS,Jawa Barat,37301
+DEMO-BS,Banten,9195
+DEMO-BS,Jawa Tengah,28105
+DEMO-BS,DI Yogyakarta,2744
+DEMO-BS,Jawa Timur,30849
+DEMO-BS,Bali,2331
+DEMO-BS,Nusa Tenggara Barat,2966
+DEMO-BS,Nusa Tenggara Timur,2966
+DEMO-BS,Kalimantan Barat,2966
+DEMO-BS,Kalimantan Tengah,1483
+DEMO-BS,Kalimantan Selatan,2225
+DEMO-BS,Kalimantan Timur,2066
+DEMO-BS,Kalimantan Utara,371
+DEMO-BS,Sulawesi Utara,1430
+DEMO-BS,Gorontalo,636
+DEMO-BS,Sulawesi Tengah,1642
+DEMO-BS,Sulawesi Barat,795
+DEMO-BS,Sulawesi Selatan,4979
+DEMO-BS,Sulawesi Tenggara,1483
+DEMO-BS,Maluku,1006
+DEMO-BS,Maluku Utara,689
+DEMO-BS,Papua,583
+DEMO-BS,Papua Barat,318
+DEMO-BS,Papua Barat Daya,318
+DEMO-BS,Papua Selatan,265
+DEMO-BS,Papua Tengah,742
+DEMO-BS,Papua Pegunungan,742
+DEMO-UL,Aceh,895
+DEMO-UL,Sumatera Utara,2540
+DEMO-UL,Sumatera Barat,944
+DEMO-UL,Riau,1091
+DEMO-UL,Kepulauan Riau,358
+DEMO-UL,Jambi,602
+DEMO-UL,Sumatera Selatan,1433
+DEMO-UL,Kepulauan Bangka Belitung,244
+DEMO-UL,Bengkulu,342
+DEMO-UL,Lampung,1530
+DEMO-UL,DKI Jakarta,6967
+DEMO-UL,Jawa Barat,13101
+DEMO-UL,Banten,3230
+DEMO-UL,Jawa Tengah,9872
+DEMO-UL,DI Yogyakarta,964
+DEMO-UL,Jawa Timur,10835
+DEMO-UL,Bali,716
+DEMO-UL,Nusa Tenggara Barat,912
+DEMO-UL,Nusa Tenggara Timur,912
+DEMO-UL,Kalimantan Barat,912
+DEMO-UL,Kalimantan Tengah,456
+DEMO-UL,Kalimantan Selatan,684
+DEMO-UL,Kalimantan Timur,635
+DEMO-UL,Kalimantan Utara,114
+DEMO-UL,Sulawesi Utara,439
+DEMO-UL,Gorontalo,195
+DEMO-UL,Sulawesi Tengah,505
+DEMO-UL,Sulawesi Barat,0
+DEMO-UL,Sulawesi Selatan,1530
+DEMO-UL,Sulawesi Tenggara,456
+DEMO-UL,Maluku,309
+DEMO-UL,Maluku Utara,0
+DEMO-UL,Papua,179
+DEMO-UL,Papua Barat,98
+DEMO-UL,Papua Barat Daya,0
+DEMO-UL,Papua Selatan,0
+DEMO-UL,Papua Tengah,0
+DEMO-UL,Papua Pegunungan,0
+DEMO-PR,Aceh,1547
+DEMO-PR,Sumatera Utara,4387
+DEMO-PR,Sumatera Barat,1631
+DEMO-PR,Riau,1884
+DEMO-PR,Kepulauan Riau,619
+DEMO-PR,Jambi,1040
+DEMO-PR,Sumatera Selatan,2474
+DEMO-PR,Kepulauan Bangka Belitung,422
+DEMO-PR,Bengkulu,590
+DEMO-PR,Lampung,2643
+DEMO-PR,DKI Jakarta,3911
+DEMO-PR,Jawa Barat,18387
+DEMO-PR,Banten,4533
+DEMO-PR,Jawa Tengah,13854
+DEMO-PR,DI Yogyakarta,1352
+DEMO-PR,Jawa Timur,15207
+DEMO-PR,Bali,1237
+DEMO-PR,Nusa Tenggara Barat,1575
+DEMO-PR,Nusa Tenggara Timur,1575
+DEMO-PR,Kalimantan Barat,1575
+DEMO-PR,Kalimantan Tengah,787
+DEMO-PR,Kalimantan Selatan,1181
+DEMO-PR,Kalimantan Timur,1097
+DEMO-PR,Kalimantan Utara,197
+DEMO-PR,Sulawesi Utara,759
+DEMO-PR,Gorontalo,337
+DEMO-PR,Sulawesi Tengah,872
+DEMO-PR,Sulawesi Barat,422
+DEMO-PR,Sulawesi Selatan,2643
+DEMO-PR,Sulawesi Tenggara,787
+DEMO-PR,Maluku,534
+DEMO-PR,Maluku Utara,365
+DEMO-PR,Papua,309
+DEMO-PR,Papua Barat,169
+DEMO-PR,Papua Barat Daya,169
+DEMO-PR,Papua Selatan,141
+DEMO-PR,Papua Tengah,394
+DEMO-PR,Papua Pegunungan,394
+COZY,Aceh,2332
+COZY,Sumatera Utara,6615
+COZY,Sumatera Barat,2459
+COZY,Riau,2841
+COZY,Kepulauan Riau,933
+COZY,Jambi,1569
+COZY,Sumatera Selatan,3731
+COZY,Kepulauan Bangka Belitung,636
+COZY,Bengkulu,890
+COZY,Lampung,3986
+COZY,DKI Jakarta,13611
+COZY,Jawa Barat,31993
+COZY,Banten,7887
+COZY,Jawa Tengah,16071
+COZY,DI Yogyakarta,1569
+COZY,Jawa Timur,26459
+COZY,Bali,1866
+COZY,Nusa Tenggara Barat,2375
+COZY,Nusa Tenggara Timur,2375
+COZY,Kalimantan Barat,2375
+COZY,Kalimantan Tengah,1187
+COZY,Kalimantan Selatan,1781
+COZY,Kalimantan Timur,1654
+COZY,Kalimantan Utara,297
+COZY,Sulawesi Utara,1145
+COZY,Gorontalo,509
+COZY,Sulawesi Tengah,1314
+COZY,Sulawesi Barat,636
+COZY,Sulawesi Selatan,3986
+COZY,Sulawesi Tenggara,1187
+COZY,Maluku,806
+COZY,Maluku Utara,551
+COZY,Papua,466
+COZY,Papua Barat,254
+COZY,Papua Barat Daya,254
+COZY,Papua Selatan,212
+COZY,Papua Tengah,594
+COZY,Papua Pegunungan,594
+DEMO-PA,Aceh,3866
+DEMO-PA,Sumatera Utara,10966
+DEMO-PA,Sumatera Barat,4077
+DEMO-PA,Riau,4710
+DEMO-PA,Kepulauan Riau,1547
+DEMO-PA,Jambi,2601
+DEMO-PA,Sumatera Selatan,6186
+DEMO-PA,Kepulauan Bangka Belitung,1054
+DEMO-PA,Bengkulu,1476
+DEMO-PA,Lampung,6608
+DEMO-PA,DKI Jakarta,9778
+DEMO-PA,Jawa Barat,45968
+DEMO-PA,Banten,11332
+DEMO-PA,Jawa Tengah,34636
+DEMO-PA,DI Yogyakarta,3381
+DEMO-PA,Jawa Timur,38017
+DEMO-PA,Bali,3093
+DEMO-PA,Nusa Tenggara Barat,3937
+DEMO-PA,Nusa Tenggara Timur,3937
+DEMO-PA,Kalimantan Barat,3937
+DEMO-PA,Kalimantan Tengah,1968
+DEMO-PA,Kalimantan Selatan,2953
+DEMO-PA,Kalimantan Timur,2742
+DEMO-PA,Kalimantan Utara,492
+DEMO-PA,Sulawesi Utara,1898
+DEMO-PA,Gorontalo,844
+DEMO-PA,Sulawesi Tengah,2179
+DEMO-PA,Sulawesi Barat,1054
+DEMO-PA,Sulawesi Selatan,6608
+DEMO-PA,Sulawesi Tenggara,1968
+DEMO-PA,Maluku,1336
+DEMO-PA,Maluku Utara,914
+DEMO-PA,Papua,773
+DEMO-PA,Papua Barat,422
+DEMO-PA,Papua Barat Daya,422
+DEMO-PA,Papua Selatan,352
+DEMO-PA,Papua Tengah,984
+DEMO-PA,Papua Pegunungan,984

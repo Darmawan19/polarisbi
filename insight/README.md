@@ -17,6 +17,8 @@ untuk POST).
 | `POST /api/insight/refresh` | admin |
 | `GET /api/insight/sources` | semua pengguna login |
 | `GET /api/insight/exposure` | semua pengguna login |
+| `GET /api/insight/overview` | semua pengguna login (mesin keputusan) |
+| `GET /api/insight/products/{code}` | semua pengguna login (404 `product_not_found`) |
 
 Aksi dicatat ke `audit_log` polaris_auth lewat fungsi publik `polaris_auth.service.audit`: `insight_refresh`,
 `insight_digest_generate` (pengguna), dan `insight_digest_auto` (actor `system`, ringkasan otomatis).
@@ -50,6 +52,9 @@ Aksi dicatat ke `audit_log` polaris_auth lewat fungsi publik `polaris_auth.servi
 | `INSIGHT_AUTO_DAILY_MIN_MINUTES` | `60` | umur minimum brief harian yang stale sebelum dibuat ulang otomatis |
 | `INSIGHT_AUTO_LONG_MIN_HOURS` | `24` | sama, untuk brief mingguan & bulanan |
 | `INSIGHT_AUTO_MAX_CALLS_PER_DAY` | `30` | batas panggilan LLM oleh auto-digest per hari (hari WIB) |
+| `INSIGHT_PRODUCT_PROVIDER` | `demo` | provider katalog produk mesin keputusan (tak dikenal → `demo` + peringatan) |
+| `INSIGHT_PRODUCT_CSV` | `insight/data/demo_products.csv` | lokasi katalog produk untuk provider `demo` |
+| `INSIGHT_PRODUCT_PROVINCE_CSV` | `insight/data/demo_product_province.csv` | lokasi sebaran polis per provinsi untuk provider `demo` |
 
 LLM memakai `llm.py` di root repo (`ANTHROPIC_API_KEY`, `CLAUDE_MODEL`). Tanpa kunci, brief tetap dibuat
 dengan templat (`status: "fallback"`).
@@ -275,6 +280,131 @@ Data demo (`demo_exposure.csv`) sepenuhnya FIKTIF: 38 provinsi × "Produk Demo A
 - `insight_digests.generated_trigger TEXT` (ditambahkan otomatis lewat `ALTER TABLE ADD COLUMN`, idempoten).
 - `insight_source_health(source, degraded, degraded_reason, updated_at)`: penanda degraded per sumber.
 - `insight_auto_digest_log(id, at, period, bucket_key, action, llm_called, result)`: jejak auto-digest.
+
+## Mesin keputusan (sinyal, peta panas produk, rekomendasi)
+
+> **DEMO dan DRAF.** Katalog produk, sensitivitas, dan sebaran polis adalah **data fiktif** (`product_data_is_demo:
+> true`) sampai ada sumber asli. Setiap rekomendasi adalah **draf untuk ditinjau manusia** (`is_draft: true`).
+> Semua angka dihitung kode deterministik; modul `signals.py`, `products.py`, dan `playbook.py` tidak mengimpor
+> atau memanggil LLM (dijaga tes).
+
+Modul: `signals.py` (sinyal per aspek), `products.py` (provider produk + peta panas), `playbook.py` (aturan),
+`overview.py` (rangkaian + cache). Semua konstanta ada di bagian atas modul masing-masing.
+
+### Penggabungan duplikat (hanya di perhitungan; data tersimpan tidak diubah)
+
+1. **Gempa lintas sumber** (`bmkg_quake` vs `usgs_quake`): satu gempa bila |Δ magnitudo| ≤ 0,3, |Δ waktu
+   terbit| ≤ 30 menit, dan sumbernya berbeda. Kejadian memakai anggota berskor tertinggi.
+2. **Berita sama dari media berbeda**: kategori sama, terbit ≤ 48 jam dari anggota pertama kelompok, dan
+   kemiripan Jaccard token judul ≥ `SIMILARITY_THRESHOLD` (0,6) terhadap salah satu anggota. Judul dinormalisasi:
+   huruf kecil, tanpa aksen dan tanda baca, tanpa kata umum (`STOPWORDS`), token ≥ 2 huruf. Cuaca dan gempa BMKG
+   tidak ikut aturan ini (judulnya berulang wajar).
+3. Satu kelompok = satu kejadian. Di setiap jendela, kejadian = anggota kelompok yang terbit di jendela itu;
+   wakilnya anggota berskor tertinggi (seri: terbaru). Jumlah sumber berbeda dicatat per kejadian.
+   **Semua jumlah kejadian dan bonus volume memakai kejadian, bukan item mentah.**
+
+**Kalibrasi ambang (6 Nov 2026, 422 item asli dari 12 feed `INSIGHT_RSS_FEEDS`):** pasangan lintas sumber
+dengan Jaccard ≥ 0,4 / 0,5 / 0,6 / 0,7 = 40 / 20 / 11 / 6. Semua pasangan ≥ 0,6 memang berita yang sama
+(mis. cadangan devisa di 3 media, 0,78–0,80). Rentang 0,5–0,6 sebagian besar benar, tetapi ada salah gabung
+("Daftar Terbaru Bunga Deposito Bank Digital" vs "Daftar Terbaru Bank Tutup", 0,56); di bawah 0,5 salah gabung
+makin sering ("Rupiah dibuka …" vs "Rupiah ditutup …"). Ambang tetap **0,6**: presisi diutamakan, sebagian
+duplikat dengan judul sangat berbeda (mis. dua judul "OJK cabut izin BPR") tetap terhitung terpisah.
+Fixture tes (`tests/test_insight_decision_engine.py`) memakai parafrase judul nyata tersebut.
+
+### Rumus sinyal per aspek
+
+Aspek: `bencana_alam`, `kesehatan_wabah`, `ekonomi_makro`, `pasar_keuangan`, `regulasi`, `industri_asuransi`,
+`perbankan_bri` (`lainnya` tidak dihitung). Untuk waktu acuan `t`, jendela = (t − 24 jam, t].
+
+| Besaran | Rumus |
+|---|---|
+| recency_decay | `0,5 ^ (umur_jam / 24)`, umur dari waktu terbit wakil kejadian ke `t` |
+| skor efektif | `skor kejadian × recency_decay` (× bobot geografis untuk sel produk) |
+| bonus volume | `min(15, 3 × (n − 1))` bila `n ≥ 2`, selain itu 0; `n` = jumlah kejadian berskor efektif ≥ 30 |
+| skor aspek | `min(100, skor efektif tertinggi + bonus volume)`, dibulatkan setengah ke atas |
+| level | Normal < 30, Pantau 30–54, Waspada 55–74, Kritis ≥ 75 (legenda di `levels`) |
+| delta | skor pada `t` − skor pada `t − 24 jam` (fungsi yang sama) |
+| tren | naik bila delta ≥ +10, turun bila ≤ −10, selain itu stabil |
+| komposit | `round(0,6 × skor aspek tertinggi + 0,4 × rata-rata tujuh aspek)`; level, delta, tren sama |
+| sparkline | skor pada akhir tiap hari WIB selama 7 hari (hari ini = sekarang) |
+| vs_baseline | skor − rata-rata skor akhir hari selama 30 hari sebelumnya (hanya hari setelah item tertua). `null` dan `baseline_ready: false` bila riwayat item < 7 hari |
+| peta provinsi | per provinsi yang punya kejadian 24 jam: skor dengan fungsi yang sama atas kejadian tujuh aspek di provinsi itu, jumlah kejadian, daftar kategori |
+
+Per aspek juga: `item_count` (kejadian 24 jam), `max_severity` (label keparahan skor kejadian tertinggi),
+`top_event_ids` (3 kejadian dengan skor efektif tertinggi), `volume_bonus`.
+
+### Katalog produk dan peta panas
+
+`ProductExposureProvider` (`list_products`, `product_province_policies`, `is_demo`). `DemoProductProvider` membaca
+`insight/data/demo_products.csv` dan `insight/data/demo_product_province.csv` (38 provinsi, total per produk =
+`active_policies`, Jawa terbesar, Credit Life lebih tersebar karena KUR; Unit-Link 0 polis di 6 provinsi terpencil).
+
+| Kode | Produk | Bencana | Wabah | Makro | Pasar | Regulasi | Ind. asuransi | Perbankan |
+|---|---|---|---|---|---|---|---|---|
+| DEMO-CL | Credit Life (Kredit KUR dan KPR) | 0,7 | 0,8 | 0,8 | 0,2 | 0,5 | 0,4 | 0,9 |
+| DEMO-BS | Tabungan dan Endowment Bancassurance | 0,3 | 0,3 | 0,7 | 0,5 | 0,5 | 0,5 | 0,8 |
+| DEMO-UL | Unit-Link | 0,1 | 0,2 | 0,5 | 1,0 | 0,8 | 0,5 | 0,4 |
+| DEMO-PR | Proteksi Individu (Term Life) | 0,5 | 0,9 | 0,3 | 0,1 | 0,5 | 0,4 | 0,3 |
+| COZY | Employee Benefit Kelompok (COZY) | 0,5 | 0,8 | 0,5 | 0,1 | 0,5 | 0,4 | 0,3 |
+| DEMO-PA | Personal Accident Digital | 0,9 | 0,3 | 0,2 | 0,1 | 0,4 | 0,3 | 0,2 |
+
+**Semua nilai di atas dan jumlah polis adalah asumsi awal dan data fiktif; wajib ditinjau Risk Management,
+Aktuaria, dan pemilik produk.**
+
+- `cell(p, a) = round(sensitivitas(p, a) × skor aspek untuk produk p)`.
+- Aspek geografis (`bencana_alam`, `kesehatan_wabah`): skor aspek untuk produk p dihitung ulang dari kejadian
+  dengan bobot `min(1, share_p / 0,05)` per kejadian; `share_p` = porsi polis produk p di provinsi kejadian.
+  Kejadian tanpa provinsi berbobot 1. Aspek lain memakai skor aspek global.
+- Per produk: `score` = sel tertinggi, `level`, `delta`/`trend` (dibanding 24 jam lalu), `drivers` (2 aspek
+  dengan sel tertinggi), `cells` (tujuh aspek), `top_province` (provinsi dengan `sensitivitas × skor efektif ×
+  bobot` tertinggi pada aspek geografis). Urutan matriks: `score` menurun, seri mengikuti urutan katalog.
+- Produk "terkait" sebuah aspek: sel aspek itu ≥ 40, urut sel menurun.
+
+**Mengganti CSV dengan sumber asli:** implementasikan provider dengan `is_demo = False` yang mengembalikan
+katalog dan **agregat** polis aktif per provinsi (tanpa data nasabah), daftarkan di `products.PROVIDERS`
+(mis. `"warehouse"`), lalu set `INSIGHT_PRODUCT_PROVIDER=warehouse`. `product_data_is_demo` mengikuti
+`provider.is_demo`. Untuk sekadar mengganti file, pakai `INSIGHT_PRODUCT_CSV` / `INSIGHT_PRODUCT_PROVINCE_CSV`
+(format kolom sama; baris berawalan `#` diabaikan).
+
+### Aturan rekomendasi (`playbook.py`, aturan sebagai data)
+
+Setiap aspek dengan level ≥ Pantau menghasilkan satu keputusan: Waspada/Kritis → `perlu_keputusan`,
+Pantau → `pantau`.
+
+| rule_id | Judul | Penanggung jawab | Horizon |
+|---|---|---|---|
+| `bencana_alam.kesiagaan_klaim` | Siapkan kesiagaan klaim di {provinsi teratas} | Klaim dan Risk Management | hari ini |
+| `kesehatan_wabah.kesiapan_klaim` | Tinjau kesiapan klaim kesehatan dan kematian akibat wabah | Aktuaria, Underwriting, Klaim | 7 hari |
+| `ekonomi_makro.asumsi_kredit` | Tinjau dampak kondisi makro terhadap asumsi dan kualitas kredit | Aktuaria dan Risk | 7 hari |
+| `pasar_keuangan.unit_link` | Pantau dana Unit-Link dan portofolio investasi | Investasi dan Distribusi | hari ini |
+| `regulasi.dampak_peraturan` | Analisis dampak peraturan baru terhadap produk dan proses | Kepatuhan, Legal, pemilik produk | 30 hari |
+| `industri_asuransi.kompetitor` | Cermati perkembangan industri dan kompetitor | Produk dan Strategi | 30 hari |
+| `perbankan_bri.grup_bri` | Pantau perkembangan Grup BRI dan perbankan nasional | Distribusi Bancassurance dan Risk | 7 hari |
+| `lintas_aspek.eskalasi` | Eskalasi ke rapat risiko terpadu (bila ≥ 3 aspek Waspada atau lebih) | Direksi dan Risk | hari ini |
+
+Daftar tindakan per aturan ada di `ASPECT_RULES` / `CROSS_RULE`.
+
+- `key` = `rule_id:scope`, stabil tanpa timestamp; scope = slug provinsi teratas (hanya bencana alam) atau `all`.
+- `priority_score` = bobot level (Pantau 1, Waspada 2, Kritis 3; lintas aspek 9) × 1000 + skor aspek
+  (lintas aspek: komposit) × 10 + 500 bila **lonjakan** (delta aspek ≥ +25, juga ditandai di `flags`).
+- `priority` = **peringkat** 1, 2, 3, … menurut `priority_score` menurun (seri: `key`), tanpa lubang. Maks 8 keputusan.
+- `confidence`: jumlah sumber berbeda pada kejadian bukti (kelompok setelah penggabungan): ≥ 3 tinggi, 2 sedang,
+  1 rendah (`source_count` ikut dikirim).
+- `why` memuat angka hasil hitung (skor, level, jumlah kejadian, delta, provinsi teratas, jumlah produk terkait);
+  `evidence` maks 5 kejadian (`id, title, url, source, published_at, score, severity, category`).
+- `headline`: "N keputusan dibutuhkan: judul A; judul B", atau "Tidak ada keputusan mendesak. N aspek dipantau.",
+  atau "Tidak ada keputusan mendesak. Semua aspek normal."
+
+### `GET /api/insight/overview`
+
+`generated_at, window_hours, composite {score, level, delta, trend}, counts {perlu_keputusan, dipantau, normal},
+headline, aspects[], provinces[], products[], decisions[], baseline_ready, exposure_is_demo, product_data_is_demo,
+attributions, degraded_sources, levels`. `counts.perlu_keputusan`/`dipantau` = jumlah keputusan per level;
+`counts.normal` = jumlah aspek (dari tujuh) berlevel Normal. Hasil hitung di-cache 30 detik per penanda data
+(waktu refresh terakhir, jumlah dan waktu item terbaru). Database kosong → semua Normal, tanpa keputusan.
+
+`GET /api/insight/products/{code}`: baris matriks produk + `sensitivity`, `province_distribution`
+(`province, policies, share`), `decisions` (keputusan yang memuat produk itu), `product_data_is_demo`.
 
 ## Privasi
 

@@ -1,0 +1,9 @@
+# DATA FIKTIF (DEMO). Semua nilai sensitivitas (0..1) dan active_policies adalah asumsi awal,
+# BUKAN data BRI Life. Wajib ditinjau Risk Management, Aktuaria, dan pemilik produk sebelum dipakai.
+product_code,product_name,product_line,channel,active_policies,s_bencana_alam,s_kesehatan_wabah,s_ekonomi_makro,s_pasar_keuangan,s_regulasi,s_industri_asuransi,s_perbankan_bri
+DEMO-CL,Credit Life (Kredit KUR dan KPR),credit_life,bancassurance,420000,0.7,0.8,0.8,0.2,0.5,0.4,0.9
+DEMO-BS,Tabungan dan Endowment Bancassurance,bancassurance_savings,bancassurance,185000,0.3,0.3,0.7,0.5,0.5,0.5,0.8
+DEMO-UL,Unit-Link,unit_link,bancassurance,64000,0.1,0.2,0.5,1.0,0.8,0.5,0.4
+DEMO-PR,Proteksi Individu (Term Life),protection,agency,92000,0.5,0.9,0.3,0.1,0.5,0.4,0.3
+COZY,Employee Benefit Kelompok (COZY),group_benefit,corporate,150000,0.5,0.8,0.5,0.1,0.5,0.4,0.3
+DEMO-PA,Personal Accident Digital,personal_accident,digital,230000,0.9,0.3,0.2,0.1,0.4,0.3,0.2

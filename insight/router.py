@@ -12,7 +12,9 @@ from polaris_auth.deps import client_ip, csrf_guard
 
 from . import db as dbm
 from . import digest as digest_mod
+from . import overview as overview_mod
 from . import pipeline
+from . import products as products_mod
 from .config import get_settings
 from .exposure import get_provider
 from .models import (CATEGORIES, DigestResponse, ExposureResponse, FeedResponse, GenerateRequest, InsightError,
@@ -157,6 +159,29 @@ def exposure():
     provider = get_provider()
     rows = sorted(provider.get_exposure(None), key=lambda r: (r["province"], r["product"]))
     return {"is_demo": bool(provider.is_demo), "rows": rows}
+
+
+# ---------- mesin keputusan (tambahan; endpoint lama tidak berubah) ----------
+
+def _degraded_sources() -> list[str]:
+    return [r["source"] for r in sources() if r["degraded"]]
+
+
+@router.get("/overview")
+def overview():
+    engine = overview_mod.compute()
+    return overview_mod.build_overview(engine, exposure_is_demo=bool(get_provider().is_demo),
+                                       degraded_sources=_degraded_sources())
+
+
+@router.get("/products/{code}")
+def product_detail(code: str):
+    engine = overview_mod.compute()
+    detail = products_mod.product_detail(code, engine.signals, engine.provider, engine.matrix)
+    if detail is None:
+        raise InsightError(404, "product_not_found", "Produk tidak dikenal.")
+    detail["decisions"] = [dict(d) for d in engine.decisions if code in d["product_codes"]]
+    return detail
 
 
 __all__ = ["router"]
