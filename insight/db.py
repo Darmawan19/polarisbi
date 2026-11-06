@@ -89,6 +89,37 @@ CREATE TABLE IF NOT EXISTS insight_auto_digest_log (
     result      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_insight_auto_digest_log_at ON insight_auto_digest_log(at);
+
+-- Mesin keputusan: log keputusan (status hanya diubah manusia; upsert otomatis tidak menimpa status).
+CREATE TABLE IF NOT EXISTS insight_decision (
+    key           TEXT PRIMARY KEY,
+    rule_id       TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at  TEXT NOT NULL,
+    last_level    TEXT NOT NULL,
+    last_title    TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'baru',
+    note          TEXT,
+    updated_by    TEXT,
+    updated_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_insight_decision_last_seen ON insight_decision(last_seen_at DESC);
+
+-- Mesin keputusan: jejak perubahan status (append-only; dijaga trigger).
+CREATE TABLE IF NOT EXISTS insight_decision_event (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    key         TEXT NOT NULL,
+    dari_status TEXT,
+    ke_status   TEXT NOT NULL,
+    note        TEXT,
+    actor       TEXT NOT NULL,
+    at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_insight_decision_event_key ON insight_decision_event(key, id);
+CREATE TRIGGER IF NOT EXISTS trg_insight_decision_event_no_update BEFORE UPDATE ON insight_decision_event
+BEGIN SELECT RAISE(ABORT, 'insight_decision_event bersifat append-only'); END;
+CREATE TRIGGER IF NOT EXISTS trg_insight_decision_event_no_delete BEFORE DELETE ON insight_decision_event
+BEGIN SELECT RAISE(ABORT, 'insight_decision_event bersifat append-only'); END;
 """
 
 # Kolom tambahan pada tabel lama (ALTER TABLE ADD COLUMN, idempoten). Baris lama: NULL.

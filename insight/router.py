@@ -11,14 +11,15 @@ from polaris_auth import require_role, require_user
 from polaris_auth.deps import client_ip, csrf_guard
 
 from . import db as dbm
+from . import decisions as decisions_mod
 from . import digest as digest_mod
 from . import overview as overview_mod
 from . import pipeline
 from . import products as products_mod
 from .config import get_settings
 from .exposure import get_provider
-from .models import (CATEGORIES, DigestResponse, ExposureResponse, FeedResponse, GenerateRequest, InsightError,
-                     RefreshResponse, SourceStatus)
+from .models import (CATEGORIES, DecisionStatusRequest, DigestResponse, ExposureResponse, FeedResponse,
+                     GenerateRequest, InsightError, RefreshResponse, SourceStatus)
 from .provinces import canonical
 from .sources import BUILTIN_META
 
@@ -167,11 +168,20 @@ def _degraded_sources() -> list[str]:
     return [r["source"] for r in sources() if r["degraded"]]
 
 
+def _with_status(decisions: list[dict]) -> list[dict]:
+    """Gabungkan status dari log (tidak pernah di-cache)."""
+    with dbm.session(get_settings().db_path) as conn:
+        smap = decisions_mod.status_map(conn, [d["key"] for d in decisions])
+    return decisions_mod.merge_status(decisions, smap)
+
+
 @router.get("/overview")
 def overview():
     engine = overview_mod.compute()
-    return overview_mod.build_overview(engine, exposure_is_demo=bool(get_provider().is_demo),
+    body = overview_mod.build_overview(engine, exposure_is_demo=bool(get_provider().is_demo),
                                        degraded_sources=_degraded_sources())
+    body["decisions"] = _with_status(body["decisions"])
+    return body
 
 
 @router.get("/products/{code}")
@@ -180,8 +190,37 @@ def product_detail(code: str):
     detail = products_mod.product_detail(code, engine.signals, engine.provider, engine.matrix)
     if detail is None:
         raise InsightError(404, "product_not_found", "Produk tidak dikenal.")
-    detail["decisions"] = [dict(d) for d in engine.decisions if code in d["product_codes"]]
+    detail["decisions"] = _with_status([d for d in engine.decisions if code in d["product_codes"]])
     return detail
+
+
+@router.get("/decisions/history")
+def decisions_history(limit: int = Query(decisions_mod.HISTORY_DEFAULT_LIMIT)):
+    limit = max(1, min(decisions_mod.HISTORY_MAX_LIMIT, limit))
+    with dbm.session(get_settings().db_path) as conn:
+        items = decisions_mod.history(conn, limit)
+    return {"items": items, "limit": limit, "statuses": list(decisions_mod.STATUSES)}
+
+
+@router.post("/decisions/{key}/status")
+def decision_status(key: str, request: Request,
+                    body: DecisionStatusRequest = Body(default_factory=DecisionStatusRequest),
+                    user: dict = Depends(require_role("analyst", "admin"))):
+    status = (body.status or "").strip().lower()
+    if status not in decisions_mod.STATUSES:
+        raise InsightError(422, "invalid_status", "Status tidak valid.", allowed=list(decisions_mod.STATUSES))
+    note = (body.note or "").strip() or None
+    if note is not None and len(note) > decisions_mod.NOTE_MAX:
+        raise InsightError(422, "invalid_note", f"Catatan maksimal {decisions_mod.NOTE_MAX} karakter.")
+    actor = user.get("username") or str(user.get("id"))
+    with dbm.session(get_settings().db_path) as conn:
+        before = conn.execute("SELECT status FROM insight_decision WHERE key=?", (key,)).fetchone()
+        result = decisions_mod.set_status(conn, key, status, note, actor, dbm.utcnow())
+    if result is None:
+        raise InsightError(404, "decision_not_found", "Keputusan tidak dikenal.")
+    _audit(request, user, "insight_decision_status",
+           f"key={key} from={before['status']} to={status} note={'yes' if note else 'no'}"[:500])
+    return result
 
 
 __all__ = ["router"]

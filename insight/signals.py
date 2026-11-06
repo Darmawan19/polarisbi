@@ -76,6 +76,7 @@ the a an of to in on for and or is are was were be by with as at from its it thi
 """.split())
 
 LOOKBACK_DAYS = BASELINE_DAYS + 2   # data yang dimuat untuk baseline + pembanding
+MAX_LOAD_ITEMS = 20000              # batas baris per perhitungan (item terbaru didahulukan)
 
 
 # ---------- utilitas ----------
@@ -209,10 +210,10 @@ def load_items(conn, since: datetime, until: datetime) -> list[Item]:
     rows = conn.execute(
         "SELECT id, source, title, url, attribution, published_at, category, province, score, meta_json"
         " FROM insight_items WHERE published_at > ? AND published_at <= ? AND category IN (%s)"
-        " ORDER BY published_at ASC, id ASC" % ",".join("?" * len(ASPECTS)),
-        (dbm.to_iso(since), dbm.to_iso(until), *ASPECTS)).fetchall()
+        " ORDER BY published_at DESC, id DESC LIMIT ?" % ",".join("?" * len(ASPECTS)),
+        (dbm.to_iso(since), dbm.to_iso(until), *ASPECTS, MAX_LOAD_ITEMS)).fetchall()
     out = []
-    for r in rows:
+    for r in reversed(rows):            # urut waktu terbit menaik
         pub = dbm.parse_iso(r["published_at"])
         if pub is None:
             continue

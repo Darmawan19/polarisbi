@@ -130,6 +130,12 @@ class GenerateRequest(BaseModel):
     language: Optional[str] = "id"
 
 
+class DecisionStatusRequest(BaseModel):
+    # Divalidasi manual supaya error-nya berformat {code: invalid_status / invalid_note}.
+    status: Optional[str] = None
+    note: Optional[str] = None
+
+
 class RefreshResult(BaseModel):
     source: str
     ok: bool

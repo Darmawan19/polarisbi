@@ -13,6 +13,8 @@ from fastapi import FastAPI
 
 from . import auto_digest
 from . import db as dbm
+from . import decisions
+from . import overview
 from . import pipeline
 from .config import get_settings
 from .router import router
@@ -31,6 +33,9 @@ def setup_insight(app: FastAPI) -> None:
     dbm.init_schema(get_settings().db_path)
     app.include_router(router)
     pipeline.register_after_refresh(auto_digest.after_refresh)
+    # mesin keputusan: simpan keputusan aktif setelah tiap refresh dan saat overview menghitung ulang
+    pipeline.register_after_refresh(decisions.after_refresh)
+    overview.on_compute(decisions.persist_engine)
 
     previous = app.router.lifespan_context
     scheduler = InsightScheduler()

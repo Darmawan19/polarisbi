@@ -19,9 +19,12 @@ untuk POST).
 | `GET /api/insight/exposure` | semua pengguna login |
 | `GET /api/insight/overview` | semua pengguna login (mesin keputusan) |
 | `GET /api/insight/products/{code}` | semua pengguna login (404 `product_not_found`) |
+| `GET /api/insight/decisions/history` | semua pengguna login |
+| `POST /api/insight/decisions/{key}/status` | analyst, admin |
 
 Aksi dicatat ke `audit_log` polaris_auth lewat fungsi publik `polaris_auth.service.audit`: `insight_refresh`,
-`insight_digest_generate` (pengguna), dan `insight_digest_auto` (actor `system`, ringkasan otomatis).
+`insight_digest_generate` (pengguna), `insight_digest_auto` (actor `system`, ringkasan otomatis), dan
+`insight_decision_status` (perubahan status keputusan).
 
 ### Field tambahan Ronde 2 (hanya tambahan; field lama tidak berubah)
 
@@ -405,6 +408,41 @@ attributions, degraded_sources, levels`. `counts.perlu_keputusan`/`dipantau` = j
 
 `GET /api/insight/products/{code}`: baris matriks produk + `sensitivity`, `province_distribution`
 (`province, policies, share`), `decisions` (keputusan yang memuat produk itu), `product_data_is_demo`.
+
+### Log keputusan dan status (`decisions.py`)
+
+Status: `baru` (bawaan), `ditinjau`, `disetujui`, `ditunda`, `ditolak`.
+
+- **Kapan keputusan aktif disimpan (upsert):** (a) lewat pemicu pasca-refresh yang sudah ada
+  (`pipeline.register_after_refresh(decisions.after_refresh)`, callback terisolasi; error tidak menggagalkan
+  refresh), dan (b) secara malas setiap kali mesin menghitung ulang untuk `GET overview`/detail produk
+  (`overview.on_compute`). Sumber lambat (GDELT, Kemenkes) selesai di latar belakang hingga ~47 detik setelah
+  refresh dan pemicu berjalan sesudahnya, jadi keputusan dari data sumber lambat bisa sedikit terlambat
+  dibanding berita cepat.
+- **Upsert tidak menimpa status.** Yang diperbarui hanya `rule_id`, `last_seen_at`, `last_level`, `last_title`.
+  Keputusan yang tidak lagi aktif tetap ada di log dengan `last_seen_at` terakhirnya.
+- **Perubahan status:** `POST /api/insight/decisions/{key}/status` body `{"status": "...", "note": "..."}`
+  (catatan opsional, maks 500 karakter). Hanya **analyst** dan **admin** (viewer 403 `forbidden`), wajib header
+  CSRF `X-Requested-With: polarisbi` (403 `csrf`). Status tidak valid → 422 `invalid_status`; catatan terlalu
+  panjang → 422 `invalid_note`; key tidak dikenal → 404 `decision_not_found`. Dicatat ke `audit_log` lewat
+  `polaris_auth.service.audit` dengan event `insight_decision_status` (`key=… from=… to=…`).
+- `GET /api/insight/decisions/history?limit=50` (maks 200): keputusan terbaru (`last_seen_at` menurun) beserta
+  `events` (jejak perubahan, terlama dulu) dan daftar `statuses`.
+- Di `overview` dan detail produk, tiap keputusan digabung dengan `status`, `status_note`, `status_updated_at`,
+  `status_updated_by`, `first_seen_at` dari log. Bagian status ini **tidak** ikut cache 30 detik.
+
+Skema (tabel baru, `CREATE TABLE IF NOT EXISTS`, tabel lama tidak diubah):
+- `insight_decision(key PK, rule_id, first_seen_at, last_seen_at, last_level, last_title, status, note,
+  updated_by, updated_at)`.
+- `insight_decision_event(id, key, dari_status, ke_status, note, actor, at)`: **append-only** (trigger menolak
+  UPDATE/DELETE). Satu baris saat keputusan pertama terlihat (actor `system`, `null → baru`) dan satu baris per
+  perubahan status.
+
+### Batas beban perhitungan
+
+Perhitungan berjalan sekali untuk request bersamaan (lock hitung tunggal; request lain memakai hasilnya),
+di-cache 30 detik per penanda data (maks 16 entri), dan memuat paling banyak `MAX_LOAD_ITEMS` (20.000) item
+terbaru dari 32 hari terakhir.
 
 ## Privasi
 

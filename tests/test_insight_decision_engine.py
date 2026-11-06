@@ -429,3 +429,36 @@ def test_old_endpoints_unchanged(app_client):
     feed = app_client.get("/api/insight/feed", headers=H).json()
     assert set(feed) == {"items", "total", "limit", "offset"}
     assert set(app_client.get("/api/insight/exposure", headers=H).json()) == {"is_demo", "rows"}
+
+
+# ---------- cache: hitung tunggal dan batas baris ----------
+
+def test_concurrent_requests_compute_once(insight_env, monkeypatch):
+    import threading
+
+    calls = []
+    real = S.compute_signals
+
+    def slow(conn, now):
+        calls.append(1)
+        import time
+        time.sleep(0.2)
+        return real(conn, now)
+
+    monkeypatch.setattr(S, "compute_signals", slow)
+    s = get_settings()
+    threads = [threading.Thread(target=O.compute, args=(s, NOW)) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(calls) == 1
+
+
+def test_load_items_row_cap_keeps_newest(insight_env, monkeypatch):
+    monkeypatch.setattr(S, "MAX_LOAD_ITEMS", 2)
+    with conn() as c:
+        for i, h in enumerate((5, 3, 1)):
+            add(c, f"i{i}", category="regulasi", score=40, hours_ago=h)
+        items = S.load_items(c, NOW - timedelta(days=1), NOW)
+    assert [i.id for i in items] == ["i1", "i2"]

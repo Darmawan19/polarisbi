@@ -18,9 +18,11 @@ from . import signals as S
 from .config import InsightSettings, get_settings
 
 CACHE_TTL_SECONDS = 30.0
+CACHE_MAX_ENTRIES = 16
 
 _cache: dict[tuple, tuple[float, "Engine"]] = {}
 _lock = threading.Lock()
+_compute_lock = threading.Lock()   # hitung tunggal: request bersamaan menunggu satu perhitungan
 # dipanggil sekali per hasil hitung baru (tidak dari cache), mis. untuk menyimpan keputusan aktif ke log
 _on_compute: list[Callable[["Engine", InsightSettings], None]] = []
 
@@ -59,24 +61,31 @@ def compute(settings: InsightSettings | None = None, now: datetime | None = None
     with dbm.session(s.db_path) as conn:
         key = (str(s.db_path), s.product_provider, str(s.product_csv), str(s.product_province_csv),
                _marker(conn), int(now.timestamp() // CACHE_TTL_SECONDS))
-        if use_cache:
-            with _lock:
-                hit = _cache.get(key)
-            if hit and hit[0] > time.monotonic():
-                return hit[1]
-        sig = S.compute_signals(conn, now)
-    provider = P.get_product_provider(s)
-    matrix = P.heat_matrix(sig, provider)
-    decisions = PB.build_decisions(sig, matrix)
-    engine = Engine(signals=sig, matrix=matrix, decisions=decisions, headline=PB.headline(decisions),
-                    product_data_is_demo=bool(provider.is_demo), provider=provider)
-    with _lock:
-        if len(_cache) > 16:
-            _cache.clear()
-        _cache[key] = (time.monotonic() + CACHE_TTL_SECONDS, engine)
-    for cb in list(_on_compute):
-        cb(engine, s)
+    if use_cache and (hit := _cached(key)) is not None:
+        return hit
+    with _compute_lock:
+        if use_cache and (hit := _cached(key)) is not None:   # dihitung request lain selagi menunggu
+            return hit
+        with dbm.session(s.db_path) as conn:
+            sig = S.compute_signals(conn, now)
+        provider = P.get_product_provider(s)
+        matrix = P.heat_matrix(sig, provider)
+        decisions = PB.build_decisions(sig, matrix)
+        engine = Engine(signals=sig, matrix=matrix, decisions=decisions, headline=PB.headline(decisions),
+                        product_data_is_demo=bool(provider.is_demo), provider=provider)
+        with _lock:
+            if len(_cache) >= CACHE_MAX_ENTRIES:
+                _cache.clear()
+            _cache[key] = (time.monotonic() + CACHE_TTL_SECONDS, engine)
+        for cb in list(_on_compute):
+            cb(engine, s)
     return engine
+
+
+def _cached(key: tuple) -> "Engine | None":
+    with _lock:
+        hit = _cache.get(key)
+    return hit[1] if hit and hit[0] > time.monotonic() else None
 
 
 def counts(engine: Engine) -> dict:
