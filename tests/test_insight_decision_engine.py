@@ -223,15 +223,38 @@ def _custom_products(tmp_path, monkeypatch, shares):
 
 
 def test_geo_weighting(insight_env, tmp_path, monkeypatch):
-    _custom_products(tmp_path, monkeypatch, {"NOL": 0.0, "SEDIKIT": 0.02, "PENUH": 0.10})
+    _custom_products(tmp_path, monkeypatch, {"NOL": 0.0, "SEDIKIT": 0.01, "PENUH": 0.03})
     with conn() as c:
         add(c, "q", category="bencana_alam", source="bmkg_quake", score=80, hours_ago=0, province="Aceh")
         add(c, "w", category="kesehatan_wabah", score=60, hours_ago=0)            # nasional → bobot 1
     cells = {r["product_code"]: r["cells"] for r in engine().matrix}
     assert cells["NOL"]["bencana_alam"] == 0
-    assert cells["SEDIKIT"]["bencana_alam"] == S.round_half_up(80 * 0.02 / 0.05)   # 32
-    assert cells["PENUH"]["bencana_alam"] == 80
+    assert cells["SEDIKIT"]["bencana_alam"] == S.round_half_up(80 * 0.01 / P.GEO_FULL_SHARE)   # 40
+    assert cells["PENUH"]["bencana_alam"] == 80                                              # porsi >= 2%
     assert all(cells[k]["kesehatan_wabah"] == 60 for k in cells)
+
+
+def test_geo_full_share_calibrated_value():
+    assert P.GEO_FULL_SHARE == 0.02
+    assert P.geo_weight(0.02) == 1.0 and P.geo_weight(0.01) == 0.5 and P.geo_weight(0.0) == 0.0
+
+
+def test_quake_80_in_sulawesi_tengah_links_a_product(insight_env):
+    with conn() as c:
+        add(c, "q", category="bencana_alam", source="bmkg_quake", score=80, hours_ago=0, province="Sulawesi Tengah")
+    e = engine()
+    d = next(x for x in e.decisions if x["aspect"] == "bencana_alam")
+    assert d["title"] == "Siapkan kesiagaan klaim di Sulawesi Tengah"
+    assert len(d["product_codes"]) >= 1 and d["product_codes"][0] == "DEMO-CL"
+    cl = next(r for r in e.matrix if r["product_code"] == "DEMO-CL")
+    assert cl["cells"]["bencana_alam"] >= P.RELATED_CELL_MIN
+
+
+@pytest.mark.parametrize("province,linked", [("Papua", 0), ("Kalimantan Utara", 0), ("Jawa Timur", 4)])
+def test_quake_80_links_by_portfolio_share(insight_env, province, linked):
+    with conn() as c:
+        add(c, "q", category="bencana_alam", source="bmkg_quake", score=80, hours_ago=0, province=province)
+    assert len(P.related_products(engine().matrix, "bencana_alam")) == linked
 
 
 def test_matrix_shape_order_and_demo_catalog(insight_env):

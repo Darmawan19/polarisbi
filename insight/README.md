@@ -356,8 +356,17 @@ Aktuaria, dan pemilik produk.**
 
 - `cell(p, a) = round(sensitivitas(p, a) × skor aspek untuk produk p)`.
 - Aspek geografis (`bencana_alam`, `kesehatan_wabah`): skor aspek untuk produk p dihitung ulang dari kejadian
-  dengan bobot `min(1, share_p / 0,05)` per kejadian; `share_p` = porsi polis produk p di provinsi kejadian.
-  Kejadian tanpa provinsi berbobot 1. Aspek lain memakai skor aspek global.
+  dengan bobot `min(1, share_p / GEO_FULL_SHARE)` per kejadian, `GEO_FULL_SHARE = 0,02`; `share_p` = porsi
+  polis produk p di provinsi kejadian. Kejadian tanpa provinsi berbobot 1. Aspek lain memakai skor aspek global.
+- **Kalibrasi `GEO_FULL_SHARE`** (CSV demo, satu gempa berskor efektif 80 per provinsi, produk tertaut = sel
+  bencana_alam ≥ 40). Provinsi tanpa produk tertaut dari 38: 0,05 → 30; 0,03 → 23; **0,02 → 17**; 0,015 → 12.
+  Kriteria: setiap provinsi dengan porsi polis produk berkepekaan tinggi (Credit Life 0,7, PA 0,9) ≥ 1,5% harus
+  menautkan produk itu, dan provinsi dengan porsi < 0,5% tidak menautkan produk. Hanya 0,02 dan 0,015 yang
+  memenuhi keduanya; dipilih 0,02 (nilai terbesar = paling konservatif) supaya provinsi berporsi ~1% (mis.
+  Kepulauan Riau, Bengkulu) tidak ikut tertaut. Dengan 0,02: Sulawesi Tengah menautkan Credit Life (sel 41),
+  Aceh dan NTT menautkan Credit Life + PA, Jawa Timur keempat produk berkepekaan ≥ 0,5; Sulawesi Utara (porsi
+  Credit Life 1,32%) dan Papua (0,64%) tidak menautkan produk. Sel maksimum per produk = sensitivitas × 80,
+  sehingga Tabungan (0,3) dan Unit-Link (0,1) tidak pernah tertaut oleh bencana tunggal berskor 80.
 - Per produk: `score` = sel tertinggi, `level`, `delta`/`trend` (dibanding 24 jam lalu), `drivers` (2 aspek
   dengan sel tertinggi), `cells` (tujuh aspek), `top_province` (provinsi dengan `sensitivitas × skor efektif ×
   bobot` tertinggi pada aspek geografis). Urutan matriks: `score` menurun, seri mengikuti urutan katalog.

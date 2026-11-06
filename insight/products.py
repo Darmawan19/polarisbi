@@ -32,7 +32,11 @@ DEMO_PRODUCTS_CSV = DATA_DIR / "demo_products.csv"
 DEMO_PRODUCT_PROVINCE_CSV = DATA_DIR / "demo_product_province.csv"
 
 GEO_ASPECTS = ("bencana_alam", "kesehatan_wabah")
-GEO_FULL_SHARE = 0.05        # porsi polis di provinsi kejadian yang dianggap terdampak penuh
+# Porsi polis produk di provinsi kejadian yang dianggap terdampak penuh (bobot 1). Dikalibrasi dari CSV demo:
+# 0,02 adalah nilai terbesar yang membuat gempa berskor efektif 80 menautkan produk berkepekaan tinggi
+# (Credit Life 0,7, PA 0,9) di setiap provinsi dengan porsi >= 1,5%, dan tetap tidak menautkan produk di
+# provinsi dengan porsi < 0,5%. Nilai lama 0,05 membuat 30 dari 38 provinsi tidak menautkan produk apa pun.
+GEO_FULL_SHARE = 0.02
 RELATED_CELL_MIN = 40        # produk "terkait" sebuah aspek bila sel >= ini
 DRIVERS = 2                  # jumlah aspek pendorong per produk
 
